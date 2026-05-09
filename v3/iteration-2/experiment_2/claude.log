@@ -1,0 +1,151 @@
+**Phase 1 complete.** The STD file was generated at:
+
+```
+tests/std/vnc_screenshot/std_cnv_61271.md
+```
+
+### Summary
+
+The STD was generated from STP `stps/2.md` (VNC Console Disconnect Due to Thumbnail/Full Screen Competition - CNV-61271). It defines **7 tests** across **6 classes** in a single test file `tests/virt/screenshot/test_vnc_screenshot.py`:
+
+| Class | Tests | Tier | STP Scenarios |
+|---|---|---|---|
+| `TestScreenshotAPI` | 2 | T1 | Scenarios 2, 3 |
+| `TestVNCStabilityDuringScreenshot` | 2 | T1 | Scenarios 1, 4 |
+| `TestScreenshotExtendedUsage` | 1 | T3 | Scenario 5 |
+| `TestScreenshotRhelGuest` | 1 | T3 | Scenario 6 (RHEL) |
+| `TestScreenshotWindowsGuest` | 1 | T3 | Scenario 6 (Windows) |
+
+Key design decisions:
+- **Separate classes per guest OS** to avoid the GRAVEYARD-documented class-scoped fixture collision issue
+- **No parametrization for guest OS** - each OS in its own class for sequential VM teardown/creation
+- **Tier 3** for extended-duration and multi-OS tests
+- **Windows test omits arm64/s390x markers** (x86_64-only)
+**Phase 2 complete.** Here is the repository exploration summary:
+
+---
+
+## Repository Exploration Complete
+
+### Documentation Findings
+- Tests use `@pytest.mark.polarion("CNV-XXXXX")` for test case IDs
+- Architecture markers: `arm64`, `s390x`, `x86_64`
+- Tiering: `tier2`, `tier3` (tier1 not relevant, tier2 not needed per CLAUDE.md)
+- Team markers: `virt`, `network`, `storage`, etc.
+- Resource markers: `high_resource_vm` for Windows/heavy VMs
+- All new tests MUST have markers; `@pytest.mark.usefixtures()` required when fixture return value unused
+
+### Available Utilities (VNC/Screenshot-Relevant)
+
+| Component | Import Path | Purpose |
+|---|---|---|
+| `VNCConnection` | `utilities.vnc_utils` | Context manager for VNC proxy connection via pexpect |
+| `collect_vnc_screenshot_for_vms()` | `utilities.data_collector` | Captures screenshot via `virtctl vnc screenshot` |
+| `run_virtctl_command()` | `utilities.infra` | Runs arbitrary virtctl commands |
+| `VirtualMachineForTests` | `utilities.virt` | Enhanced VM class for testing |
+| `fedora_vm_body()` | `utilities.virt` | Generates Fedora VM body spec |
+| `running_vm()` | `utilities.virt` | Starts VM and waits for readiness |
+| `Console` | `utilities.console` | Interactive console access via pexpect |
+| `TimeoutSampler` | `timeout_sampler` | Polling/waiting utility (replaces `time.sleep()`) |
+
+**Key Constants** (`utilities.constants`): `TIMEOUT_1MIN=60`, `TIMEOUT_2MIN=120`, `TIMEOUT_5MIN=300`, `TIMEOUT_10MIN=600`, `TIMEOUT_30MIN=1800`
+
+### Common Fixtures
+- `namespace` (function scope) - isolated test namespace
+- `unprivileged_client` (session scope) - namespace admin client
+- `admin_client` (session scope) - cluster admin client
+- `golden_image_data_source_for_test_scope_class` - for RHEL/Windows VMs
+
+### Test Structure Conventions
+- Module-level `pytestmark` for shared markers
+- `LOGGER = logging.getLogger(__name__)` at module top
+- VM fixtures use `with VirtualMachineForTests(...) as vm:` + `running_vm(vm=vm)` + `yield vm`
+- VNC usage: `with VNCConnection(vm=vm):` as context manager
+
+### GRAVEYARD Lessons (10 Entries - Critical DO NOT Rules)
+
+| # | DO NOT Rule | Relevance |
+|---|---|---|
+| 1 | DO NOT assume CRD field name casing or value types - verify schema | Low |
+| 2 | DO NOT confuse return types with parameter types; use `DynamicClient` | Medium |
+| **3** | **DO NOT use multiple different class-scoped VM fixtures in the same class** | **HIGH** |
+| **4** | **DO NOT rely on default `verify_stderr=True` with virtctl - always pass `verify_stderr=False`** | **HIGH** |
+| 5 | DO NOT expect `TimeoutExpiredError` from ocp_resources - catch `ApiException` | Medium |
+| 6 | DO NOT assume pause prevents reset; verify actual API behavior | Low |
+| 7 | DO NOT assume `unprivileged_client` lacks permissions - it's namespace admin | Medium |
+| **8** | **DO NOT use default SSH timeout after hard reset - use `TIMEOUT_10MIN`+** | Medium |
+| 9 | DO NOT use high `cpu_max_sockets` + large `memory_guest` on constrained clusters | Low |
+| 10 | DO NOT make negative tests depend on positive migration tests | Low |
+
+**Entries 3 and 4 are directly relevant** to the VNC screenshot tests:
+- Entry 3: Each guest OS (Fedora, RHEL, Windows) must be in its **own test class** (already applied in STD)
+- Entry 4: Any `run_virtctl_command()` call for screenshots must include `verify_stderr=False`
+**Phase 3 complete.** The following test files were generated:
+
+### Generated Files
+
+| File | Purpose |
+|---|---|
+| `tests/virt/screenshot/__init__.py` | Package init |
+| `tests/virt/screenshot/utils.py` | `take_screenshot()` helper using `virtctl vnc screenshot` |
+| `tests/virt/screenshot/conftest.py` | 5 fixtures: `screenshot_fedora_vm`, `active_vnc_connection`, `screenshot_rhel_vm`, `screenshot_windows_vm` |
+| `tests/virt/screenshot/test_vnc_screenshot.py` | 7 tests across 5 classes |
+
+### Test Structure
+
+| Class | Tests | Tier | Key Fixtures |
+|---|---|---|---|
+| `TestScreenshotAPI` | `test_screenshot_without_vnc_connection`, `test_screenshot_returns_valid_image` | T1 | `screenshot_fedora_vm` |
+| `TestVNCStabilityDuringScreenshot` | `test_vnc_connection_stable_during_screenshot`, `test_vnc_unaffected_by_repeated_screenshots` | T1 | `screenshot_fedora_vm`, `active_vnc_connection` |
+| `TestScreenshotExtendedUsage` | `test_vnc_stable_during_extended_screenshot_usage` | T3 | `screenshot_fedora_vm`, `active_vnc_connection` |
+| `TestScreenshotRhelGuest` | `test_screenshot_with_rhel_guest` | T3 | `screenshot_rhel_vm` (registry image + instance types) |
+| `TestScreenshotWindowsGuest` | `test_screenshot_with_windows_guest` | T3 | `screenshot_windows_vm` (golden image data volume) |
+
+### GRAVEYARD Compliance
+
+- Entry 3 (separate classes per VM fixture): Each guest OS has its own class
+- Entry 4 (`verify_stderr=False` for virtctl): Applied in `take_screenshot()` 
+- All other entries: Not applicable to this feature
+**Phase 4 complete.** GRAVEYARD verification results:
+
+```
+GRAVEYARD Verification Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Entries checked:     10
+Violations found:     0
+Fixes applied:        0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+| # | Entry | Result |
+|---|---|---|
+| 1 | HCO CR field name casing | N/A - no HCO patching |
+| 2 | Wrong type hints on client params | No violation - types correct |
+| 3 | Different VM fixtures in same class | No violation - each class uses one VM fixture |
+| 4 | `verify_stderr=False` for virtctl | No violation - already applied in `utils.py:18` |
+| 5 | ApiException vs TimeoutExpiredError | N/A - no negative API tests |
+| 6 | Paused VMI reset succeeds | N/A - no reset operations |
+| 7 | Unprivileged user permissions | N/A - no RBAC tests |
+| 8 | SSH timeout after hard reset | N/A - SSH disabled (`check_ssh_connectivity=False`) |
+| 9 | VM resource sizing too large | No violation - uses minimal/standard sizes |
+| 10 | CPU hotplug migration dependencies | N/A - no hotplug/migration |
+
+The two most relevant entries (3 and 4) were already correctly handled during code generation. No modifications needed.
+**Phase 5 complete.** Pyright validation results:
+
+```
+Pyright Validation Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Files checked:    3
+  - tests/virt/screenshot/test_vnc_screenshot.py
+  - tests/virt/screenshot/conftest.py
+  - tests/virt/screenshot/utils.py
+Errors:           0
+Warnings:         0
+Iterations:       1 (clean on first run)
+Fixes applied:    0
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+All three generated files pass pyright type checking with zero errors, zero warnings, and zero informational messages. No edits were needed.
+The background task notification is for the same test run I already processed - all 6 tests passed. Phase 6 and the full pipeline are complete. No further action needed.

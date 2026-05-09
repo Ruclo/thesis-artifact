@@ -1,0 +1,257 @@
+/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+  self.headers = http_resp.getheaders()
+/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+  self.headers = http_resp.getheaders()
+2026-01-27T11:29:24.585645 ocp_resources Namespace INFO Create Namespace cnv-tests-run-in-progress-ns
+2026-01-27T11:29:24.585874 ocp_resources Namespace INFO Posting {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'cnv-tests-run-in-progress-ns'}, 'spec': {}}
+2026-01-27T11:29:24.651878 ocp_resources Namespace INFO Wait until Namespace cnv-tests-run-in-progress-ns is created
+2026-01-27T11:29:24.692102 ocp_resources Namespace INFO Wait for Namespace cnv-tests-run-in-progress-ns status to be Active
+2026-01-27T11:29:24.716877 ocp_resources Namespace INFO Status of Namespace cnv-tests-run-in-progress-ns is Active
+2026-01-27T11:29:24.717831 ocp_resources Namespace INFO Update Namespace cnv-tests-run-in-progress-ns:
+{'metadata': {'labels': {'pod-security.kubernetes.io/enforce': 'privileged', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}, 'name': 'cnv-tests-run-in-progress-ns'}}
+2026-01-27T11:29:24.751000 ocp_resources ConfigMap INFO Create ConfigMap cnv-tests-run-in-progress
+2026-01-27T11:29:24.751344 ocp_resources ConfigMap INFO Posting {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'cnv-tests-run-in-progress', 'namespace': 'cnv-tests-run-in-progress-ns'}, 'data': '*******'}
+2026-01-27T11:29:24.812250 ocp_resources ConfigMap INFO Wait until ConfigMap cnv-tests-run-in-progress is created
+=============================================================== test session starts ===============================================================
+platform linux -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/mvavrine/cnv/openshift-virtualization-tests
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.12.0, html-4.1.1, order-1.3.0, repeat-0.9.4, progress-1.4.0, dependency-0.6.0, jira-0.3.22, metadata-3.1.1, testconfig-0.2.0, benchmark-5.2.3, mock-3.15.1
+__________________________________________ tests/storage/snapshots/test_snapshot_restore_run_strategy.py __________________________________________
+tests/storage/snapshots/test_snapshot_restore_run_strategy.py:167: in <module>
+tests/storage/snapshots/test_snapshot_restore_run_strategy.py:167: in <module>
+    class TestSnapshotRestoreWithRunStrategy:
+tests/storage/snapshots/test_snapshot_restore_run_strategy.py:174: in TestSnapshotRestoreWithRunStrategy
+    {"run_strategy": VirtualMachine.RunStrategy.RERUN_ON_FAILURE, "vm_name": "vm-cnv-63819"},
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'RunStrategy' has no attribute 'RERUN_ON_FAILURE'. Did you mean: 'RERUNONFAILURE'?
+    class TestSnapshotRestoreWithRunStrategy:
+tests/storage/snapshots/test_snapshot_restore_run_strategy.py:174: in TestSnapshotRestoreWithRunStrategy
+    {"run_strategy": VirtualMachine.RunStrategy.RERUN_ON_FAILURE, "vm_name": "vm-cnv-63819"},
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'RunStrategy' has no attribute 'RERUN_ON_FAILURE'. Did you mean: 'RERUNONFAILURE'?
+----------------------------------------------------------------- Captured stderr -----------------------------------------------------------------
+2026-01-27T11:29:23.473098 ocp_resources.resource INFO Trying to get client via new_client_from_config
+2026-01-27T11:29:24.652196 timeout_sampler INFO Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait.lambda: self.exists)
+2026-01-27T11:29:24.691730 timeout_sampler INFO Elapsed time: 0.0002319812774658203 [0:00:00.000232]
+2026-01-27T11:29:24.692393 timeout_sampler INFO Waiting for 120 seconds [0:02:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_for_status.lambda: self.exists)
+2026-01-27T11:29:24.717216 timeout_sampler INFO Elapsed time: 0.00026917457580566406 [0:00:00.000269]
+2026-01-27T11:29:24.717585 ocp_resources.resource INFO ResourceEdits: Updating data for resource Namespace cnv-tests-run-in-progress-ns
+2026-01-27T11:29:24.812548 timeout_sampler INFO Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait.lambda: self.exists)
+2026-01-27T11:29:24.834993 timeout_sampler INFO Elapsed time: 0.0001876354217529297 [0:00:00.000188]
+collected 1 item / 1 error                                                                                                                        
+2026-01-27T11:29:25.388181 ocp_resources ConfigMap INFO Delete ConfigMap cnv-tests-run-in-progress
+2026-01-27T11:29:25.417430 ocp_resources ConfigMap INFO Deleting {'kind': 'ConfigMap', 'apiVersion': 'v1', 'metadata': {'name': 'cnv-tests-run-in-progress', 'namespace': 'cnv-tests-run-in-progress-ns', 'uid': 'bc400a6e-6de9-4189-953d-384b8515c177', 'resourceVersion': '40555', 'creationTimestamp': '2026-01-27T10:29:24Z', 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-01-27T10:29:24Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:data': {'.': {}, 'f:host': {}, 'f:pytest_cmd': {}, 'f:run-in-container': {}, 'f:running_from_dir': {}, 'f:session-id': {}, 'f:user': {}}}}]}, 'data': '*******'}
+2026-01-27T11:29:25.437447 ocp_resources ConfigMap INFO Wait until ConfigMap cnv-tests-run-in-progress is deleted
+--- Logging error ---
+Traceback (most recent call last):
+  File "/home/mvavrine/.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/logging/__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 353, in wrap_session
+    config.hook.pytest_sessionfinish(
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/conftest.py", line 819, in pytest_sessionfinish
+    run_in_progress_config_map(client=admin_client).clean_up()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 839, in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 1068, in delete
+    return self.wait_deleted(timeout=timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 936, in wait_deleted
+    for sample in TimeoutSampler(wait_timeout=timeout, sleep=1, func=lambda: self.exists):
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py", line 155, in __iter__
+    LOGGER.info(log)
+Message: 'Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py", line 162, in __iter__
+    yield self.func(*self.func_args, **self.func_kwargs)
+GeneratorExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/mvavrine/.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/logging/__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 353, in wrap_session
+    config.hook.pytest_sessionfinish(
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/conftest.py", line 819, in pytest_sessionfinish
+    run_in_progress_config_map(client=admin_client).clean_up()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 839, in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 1068, in delete
+    return self.wait_deleted(timeout=timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 938, in wait_deleted
+    return True
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py", line 180, in __iter__
+    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+Message: 'Elapsed time: 0.005666971206665039 [0:00:00.005667]'
+Arguments: ()
+2026-01-27T11:29:25.458190 ocp_resources Namespace INFO Delete Namespace cnv-tests-run-in-progress-ns
+2026-01-27T11:29:25.469434 ocp_resources Namespace INFO Deleting {'kind': 'Namespace', 'apiVersion': 'v1', 'metadata': {'name': 'cnv-tests-run-in-progress-ns', 'uid': 'a5c14cfe-22f4-4ae2-b26e-c0abb9a61f88', 'resourceVersion': '40554', 'creationTimestamp': '2026-01-27T10:29:24Z', 'labels': {'kubernetes.io/metadata.name': 'cnv-tests-run-in-progress-ns', 'pod-security.kubernetes.io/audit': 'restricted', 'pod-security.kubernetes.io/audit-version': 'latest', 'pod-security.kubernetes.io/enforce': 'privileged', 'pod-security.kubernetes.io/warn': 'restricted', 'pod-security.kubernetes.io/warn-version': 'latest', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}, 'annotations': {'openshift.io/sa.scc.mcs': 's0:c26,c10', 'openshift.io/sa.scc.supplemental-groups': '1000670000/10000', 'openshift.io/sa.scc.uid-range': '1000670000/10000', 'security.openshift.io/MinimallySufficientPodSecurityStandard': 'restricted'}, 'managedFields': [{'manager': 'pod-security-admission-label-synchronization-controller', 'operation': 'Apply', 'apiVersion': 'v1', 'time': '2026-01-27T10:29:24Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'f:security.openshift.io/MinimallySufficientPodSecurityStandard': {}}, 'f:labels': {'f:pod-security.kubernetes.io/audit': {}, 'f:pod-security.kubernetes.io/audit-version': {}, 'f:pod-security.kubernetes.io/warn': {}, 'f:pod-security.kubernetes.io/warn-version': {}}}}}, {'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-01-27T10:29:24Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:labels': {'.': {}, 'f:kubernetes.io/metadata.name': {}, 'f:pod-security.kubernetes.io/enforce': {}, 'f:security.openshift.io/scc.podSecurityLabelSync': {}}}}}, {'manager': 'cluster-policy-controller', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-01-27T10:29:24Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'.': {}, 'f:openshift.io/sa.scc.mcs': {}, 'f:openshift.io/sa.scc.supplemental-groups': {}, 'f:openshift.io/sa.scc.uid-range': {}}}}}]}, 'spec': {'finalizers': ['kubernetes']}, 'status': {'phase': 'Active'}}
+2026-01-27T11:29:25.514101 ocp_resources Namespace INFO Wait until Namespace cnv-tests-run-in-progress-ns is deleted
+--- Logging error ---
+Traceback (most recent call last):
+  File "/home/mvavrine/.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/logging/__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 353, in wrap_session
+    config.hook.pytest_sessionfinish(
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/conftest.py", line 820, in pytest_sessionfinish
+    deploy_run_in_progress_namespace(client=admin_client).clean_up()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 839, in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 1068, in delete
+    return self.wait_deleted(timeout=timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 936, in wait_deleted
+    for sample in TimeoutSampler(wait_timeout=timeout, sleep=1, func=lambda: self.exists):
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py", line 155, in __iter__
+    LOGGER.info(log)
+Message: 'Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py", line 162, in __iter__
+    yield self.func(*self.func_args, **self.func_kwargs)
+GeneratorExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/mvavrine/.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/logging/__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: I/O operation on closed file.
+Call stack:
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/_pytest/main.py", line 353, in wrap_session
+    config.hook.pytest_sessionfinish(
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/conftest.py", line 820, in pytest_sessionfinish
+    deploy_run_in_progress_namespace(client=admin_client).clean_up()
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 839, in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 1068, in delete
+    return self.wait_deleted(timeout=timeout)
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/ocp_resources/resource.py", line 938, in wait_deleted
+    return True
+  File "/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py", line 180, in __iter__
+    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+Message: 'Elapsed time: 8.072826385498047 [0:00:08.072826]'
+Arguments: ()
+================================================================ 1 error in 8.74s =================================================================
+
+===================================================================== ERRORS ======================================================================
+_________________________________ ERROR collecting tests/storage/snapshots/test_snapshot_restore_run_strategy.py __________________________________
+tests/storage/snapshots/test_snapshot_restore_run_strategy.py:167: in <module>
+    class TestSnapshotRestoreWithRunStrategy:
+tests/storage/snapshots/test_snapshot_restore_run_strategy.py:174: in TestSnapshotRestoreWithRunStrategy
+    {"run_strategy": VirtualMachine.RunStrategy.RERUN_ON_FAILURE, "vm_name": "vm-cnv-63819"},
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'RunStrategy' has no attribute 'RERUN_ON_FAILURE'. Did you mean: 'RERUNONFAILURE'?
+----------------------------------------------------------------- Captured stderr -----------------------------------------------------------------
+2026-01-27T11:29:23.473098 ocp_resources.resource INFO Trying to get client via new_client_from_config
+2026-01-27T11:29:24.652196 timeout_sampler INFO Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait.lambda: self.exists)
+2026-01-27T11:29:24.691730 timeout_sampler INFO Elapsed time: 0.0002319812774658203 [0:00:00.000232]
+2026-01-27T11:29:24.692393 timeout_sampler INFO Waiting for 120 seconds [0:02:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_for_status.lambda: self.exists)
+2026-01-27T11:29:24.717216 timeout_sampler INFO Elapsed time: 0.00026917457580566406 [0:00:00.000269]
+2026-01-27T11:29:24.717585 ocp_resources.resource INFO ResourceEdits: Updating data for resource Namespace cnv-tests-run-in-progress-ns
+2026-01-27T11:29:24.812548 timeout_sampler INFO Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait.lambda: self.exists)
+2026-01-27T11:29:24.834993 timeout_sampler INFO Elapsed time: 0.0001876354217529297 [0:00:00.000188]
+================================================================ warnings summary =================================================================
+.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91
+.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91
+  /home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+    self.headers = http_resp.getheaders()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================================= short test summary info =============================================================
+ERROR tests/storage/snapshots/test_snapshot_restore_run_strategy.py - AttributeError: type object 'RunStrategy' has no attribute 'RERUN_ON_FAILURE'. Did you mean: 'RERUNONFAILURE'?
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+========================================================== 2 warnings, 1 error in 8.74s ===========================================================

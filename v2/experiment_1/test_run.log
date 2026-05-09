@@ -1,0 +1,778 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/mvavrine/cnv/openshift-virtualization-tests
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.12.0, html-4.1.1, order-1.3.0, repeat-0.9.4, progress-1.4.0, dependency-0.6.0, jira-0.3.22, metadata-3.1.1, testconfig-0.2.0, benchmark-5.2.3, mock-3.15.1
+collected 5 items
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py E [ 20%]
+
+
+_____________ ERROR at setup of test_disable_common_instancetypes ______________
+
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>
+
+    @pytest.fixture()
+    def hco_with_common_instancetypes_disabled(admin_client, hco_namespace):
+        """
+        Disable common-instancetypes deployment via HCO CR.
+    
+        Yields HCO resource with commonInstancetypesDeployment set to Disabled.
+        Restores original configuration on cleanup.
+        """
+        hco_resource = get_hyperconverged_resource(client=admin_client, hco_ns_name=hco_namespace.name)
+        LOGGER.info("Disabling common-instancetypes deployment via HCO CR")
+    
+        with ResourceEditorValidateHCOReconcile(
+            patches={hco_resource: {"spec": {"commonInstancetypesDeployment": COMMON_INSTANCETYPES_DEPLOYMENT_DISABLED}}},
+            wait_for_reconcile_post_update=True,
+        ):
+>           wait_for_common_instancetypes_state(admin_client=admin_client, expected_present=False)
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py:66: in wait_for_common_instancetypes_state
+    for sample in sampler:
+                  ^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f2fcd9a3610>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 600
+E       Function: tests.infrastructure.instance_types.test_common_instancetypes_deployment.get_common_instancetypes  Kwargs: {'admin_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>}
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+
+------------------------------------------ test_disable_common_instancetypes ------------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-02-12T12:23:19.318513 conftest [32mINFO[0m Executing session fixture: admin_client[0m
+2026-02-12T12:23:19.318678 conftest [32mINFO[0m Executing session fixture: pytestconfig[0m
+2026-02-12T12:23:19.318774 conftest [32mINFO[0m Executing session fixture: installing_cnv[0m
+2026-02-12T12:23:19.318844 conftest [32mINFO[0m Executing session fixture: cnv_tests_utilities_namespace[0m
+2026-02-12T12:23:19.493520 ocp_resources Namespace [32mINFO[0m Create Namespace cnv-tests-utilities[0m
+2026-02-12T12:23:19.493776 ocp_resources Namespace [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'cnv-tests-utilities', 'labels': {'pod-security.kubernetes.io/enforce': 'privileged', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}}, 'spec': {}}[0m
+2026-02-12T12:23:19.900360 ocp_resources Namespace [32mINFO[0m Wait for Namespace cnv-tests-utilities status to be Active[0m
+2026-02-12T12:23:19.900501 timeout_sampler [32mINFO[0m Waiting for 120 seconds [0:02:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_for_status.lambda: self.exists)[0m
+2026-02-12T12:23:20.104485 ocp_resources Namespace [32mINFO[0m Status of Namespace cnv-tests-utilities is Active[0m
+2026-02-12T12:23:20.104589 timeout_sampler [32mINFO[0m Elapsed time: 6.4849853515625e-05 [0:00:00.000065][0m
+2026-02-12T12:23:20.105014 ocp_resources.resource [32mINFO[0m kind: OAuth api version: config.openshift.io/v1[0m
+2026-02-12T12:23:20.105469 ocp_resources.resource [32mINFO[0m kind: DaemonSet api version: apps/v1[0m
+2026-02-12T12:23:20.104735 conftest [32mINFO[0m Executing session fixture: skip_unprivileged_client[0m
+2026-02-12T12:23:20.104827 conftest [32mINFO[0m Executing session fixture: identity_provider_config[0m
+2026-02-12T12:23:20.105233 conftest [32mINFO[0m Executing session fixture: leftovers_cleanup[0m
+2026-02-12T12:23:20.105306 tests.conftest [32mINFO[0m Checking for leftover resources[0m
+2026-02-12T12:23:20.719400 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource OAuth cluster[0m
+2026-02-12T12:23:20.719687 ocp_resources OAuth [32mINFO[0m Update OAuth cluster:
+{'metadata': {'name': 'cluster'}, 'spec': {}}[0m
+2026-02-12T12:23:20.923891 conftest [32mINFO[0m Executing session fixture: artifactory_setup[0m
+2026-02-12T12:23:20.924046 tests.conftest [32mINFO[0m Checking for artifactory credentials:[0m
+2026-02-12T12:23:20.924115 tests.conftest [33mWARNING[0m Explicitly skipping artifactory setup check due to use of --skip-artifactory-check[0m
+2026-02-12T12:23:20.924235 conftest [32mINFO[0m Executing session fixture: os_path_environment[0m
+2026-02-12T12:23:20.925323 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:23:20.924398 conftest [32mINFO[0m Executing session fixture: tmpdir_factory[0m
+2026-02-12T12:23:20.924495 conftest [32mINFO[0m Executing session fixture: bin_directory[0m
+2026-02-12T12:23:20.925120 conftest [32mINFO[0m Executing session fixture: virtctl_binary[0m
+2026-02-12T12:23:20.932857 ocp_resources.resource [32mINFO[0m kind: ConsoleCLIDownload api version: console.openshift.io/v1[0m
+2026-02-12T12:23:21.948654 utilities.infra [32mINFO[0m Downloading archive using: url=https://hyperconverged-cluster-cli-download-openshift-cnv.apps.c01-mv-421.rhos-psi.cnv-qe.rhood.us/amd64/linux/virtctl.tar.gz[0m
+2026-02-12T12:23:27.490233 utilities.infra [32mINFO[0m Extract the downloaded archive.[0m
+2026-02-12T12:23:27.934933 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:23:27.933613 utilities.infra [32mINFO[0m Downloaded file: ['virtctl'][0m
+2026-02-12T12:23:27.934489 conftest [32mINFO[0m Executing session fixture: oc_binary[0m
+2026-02-12T12:23:27.940876 ocp_resources.resource [32mINFO[0m kind: ConsoleCLIDownload api version: console.openshift.io/v1[0m
+2026-02-12T12:23:28.809300 utilities.infra [32mINFO[0m Downloading archive using: url=https://downloads-openshift-console.apps.c01-mv-421.rhos-psi.cnv-qe.rhood.us/amd64/linux/oc.tar[0m
+2026-02-12T12:26:31.017821 utilities.infra [32mINFO[0m Extract the downloaded archive.[0m
+2026-02-12T12:26:31.085352 ocp_resources.resource [32mINFO[0m kind: ClusterVersion api version: config.openshift.io/v1[0m
+2026-02-12T12:26:31.083712 utilities.infra [32mINFO[0m Downloaded file: ['oc'][0m
+2026-02-12T12:26:31.084733 conftest [32mINFO[0m Executing session fixture: bin_directory_to_os_path[0m
+2026-02-12T12:26:31.085091 tests.conftest [32mINFO[0m Adding /tmp/pytest-nGSqCypjxPuFYKKkt9uHT3/bin0 to $PATH[0m
+2026-02-12T12:26:31.085192 conftest [32mINFO[0m Executing session fixture: openshift_current_version[0m
+2026-02-12T12:26:31.862396 conftest [32mINFO[0m Executing session fixture: hco_namespace[0m
+2026-02-12T12:26:32.107414 conftest [32mINFO[0m Executing session fixture: csv_scope_session[0m
+2026-02-12T12:26:32.730662 ocp_resources.resource [32mINFO[0m kind: Subscription api version: operators.coreos.com/v1alpha1[0m
+2026-02-12T12:26:33.131159 ocp_resources.resource [32mINFO[0m kind: ClusterServiceVersion api version: operators.coreos.com/v1alpha1[0m
+2026-02-12T12:26:33.826040 conftest [32mINFO[0m Executing session fixture: cnv_current_version[0m
+2026-02-12T12:26:34.067589 ocp_resources.resource [32mINFO[0m kind: Subscription api version: operators.coreos.com/v1alpha1[0m
+2026-02-12T12:26:34.067422 conftest [32mINFO[0m Executing session fixture: cnv_subscription_scope_session[0m
+2026-02-12T12:26:34.257615 conftest [32mINFO[0m Executing session fixture: hco_image[0m
+2026-02-12T12:26:34.463018 ocp_resources.resource [32mINFO[0m kind: CatalogSource api version: operators.coreos.com/v1alpha1[0m
+2026-02-12T12:26:34.871330 ocp_resources.resource [32mINFO[0m kind: StorageClass api version: storage.k8s.io/v1[0m
+2026-02-12T12:26:34.871184 conftest [32mINFO[0m Executing session fixture: cluster_storage_classes[0m
+2026-02-12T12:26:35.077760 ocp_resources.resource [32mINFO[0m kind: ClusterServiceVersion api version: operators.coreos.com/v1alpha1[0m
+2026-02-12T12:26:35.077549 conftest [32mINFO[0m Executing session fixture: ocs_storage_class[0m
+2026-02-12T12:26:35.077656 conftest [32mINFO[0m Executing session fixture: ocs_current_version[0m
+2026-02-12T12:26:35.488048 conftest [32mINFO[0m Executing session fixture: kubevirt_resource_scope_session[0m
+2026-02-12T12:26:35.699357 ocp_resources.resource [32mINFO[0m kind: KubeVirt api version: kubevirt.io/v1[0m
+2026-02-12T12:26:35.898473 ocp_resources.resource [32mINFO[0m kind: Network api version: config.openshift.io/v1[0m
+2026-02-12T12:26:35.897951 conftest [32mINFO[0m Executing session fixture: cluster_service_network[0m
+2026-02-12T12:26:36.101078 conftest [32mINFO[0m Executing session fixture: ipv6_supported_cluster[0m
+2026-02-12T12:26:36.101552 conftest [32mINFO[0m Executing session fixture: ipv4_supported_cluster[0m
+2026-02-12T12:26:36.101870 conftest [32mINFO[0m Executing session fixture: nodes[0m
+2026-02-12T12:26:36.318244 conftest [32mINFO[0m Executing session fixture: workers[0m
+2026-02-12T12:26:37.437541 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:26:37.436400 conftest [32mINFO[0m Executing session fixture: cnv_source[0m
+2026-02-12T12:26:37.436792 conftest [32mINFO[0m Executing session fixture: is_production_source[0m
+2026-02-12T12:26:37.437007 conftest [32mINFO[0m Executing session fixture: generated_pulled_secret[0m
+2026-02-12T12:26:38.559800 conftest [32mINFO[0m Executing session fixture: cnv_tests_utilities_service_account[0m
+2026-02-12T12:26:38.578785 ocp_resources ServiceAccount [32mINFO[0m Create ServiceAccount cnv-tests-sa[0m
+2026-02-12T12:26:38.578979 ocp_resources ServiceAccount [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'ServiceAccount', 'metadata': {'name': 'cnv-tests-sa', 'namespace': 'cnv-tests-utilities'}}[0m
+2026-02-12T12:26:40.506114 timeout_sampler [32mINFO[0m Waiting for 10 seconds [0:00:10], retry every 1 seconds. (Function: utilities.virt._get_image_json  Kwargs: {'cmd': 'oc image -o json info quay.io/openshift-cnv/qe-net-utils:latest --filter-by-os linux/amd64 --registry-config=/tmp/tmpyewg8jzq-cnv-tests-pull-secret/pull-secrets.json'})[0m
+2026-02-12T12:26:40.505633 conftest [32mINFO[0m Executing session fixture: utility_daemonset[0m
+2026-02-12T12:26:40.506405 pyhelper_utils.shell [32mINFO[0m Running oc image -o json info quay.io/openshift-cnv/qe-net-utils:latest --filter-by-os linux/amd64 --registry-config=/tmp/tmpyewg8jzq-cnv-tests-pull-secret/pull-secrets.json command[0m
+2026-02-12T12:26:42.501513 timeout_sampler [32mINFO[0m Elapsed time: 0.0001800060272216797 [0:00:00.000180][0m
+2026-02-12T12:26:42.519920 ocp_resources.resource [32mINFO[0m kind: DaemonSet api version: apps/v1 --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 2 times][0m
+2026-02-12T12:26:42.526283 ocp_resources DaemonSet [32mINFO[0m Create DaemonSet utility[0m
+2026-02-12T12:26:42.526479 ocp_resources DaemonSet [32mINFO[0m Posting {'apiVersion': 'apps/v1', 'kind': 'DaemonSet', 'metadata': {'annotations': {'deprecated.daemonset.template.generation': '0'}, 'creationTimestamp': None, 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'name': 'utility', 'namespace': 'cnv-tests-utilities'}, 'spec': {'revisionHistoryLimit': 10, 'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'creationTimestamp': None, 'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'containers': [{'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'imagePullPolicy': 'IfNotPresent', 'name': 'utility', 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'failureThreshold': 3, 'initialDelaySeconds': 5, 'periodSeconds': 5, 'successThreshold': 1, 'timeoutSeconds': 1}, 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'tty': True, 'volumeMounts': [{'mountPath': '/host', 'name': 'host'}, {'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount', 'name': 'kube-api-access-m5ch7', 'readOnly': True}, {'mountPath': '/host/run/openvswitch', 'name': 'ovs-run'}, {'mountPath': '/run/dbus/system_bus_socket', 'name': 'dbus-socket'}, {'mountPath': '/host/dev', 'name': 'dev'}, {'mountPath': '/host/etc', 'name': 'etc'}, {'mountPath': '/host/var', 'name': 'var'}]}], 'dnsPolicy': 'ClusterFirst', 'enableServiceLinks': True, 'hostNetwork': True, 'hostPID': True, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'preemptionPolicy': 'PreemptLowerPriority', 'priority': 0, 'restartPolicy': 'Always', 'schedulerName': 'default-scheduler', 'securityContext': {'privileged': True}, 'serviceAccount': 'cnv-tests-sa', 'serviceAccountName': 'cnv-tests-sa', 'terminationGracePeriodSeconds': 30, 'tolerations': [{'effect': 'NoSchedule', 'key': 'node-role.kubernetes.io/master', 'operator': 'Exists'}], 'volumes': [{'hostPath': {'path': '/', 'type': 'Directory'}, 'name': 'host'}, {'hostPath': {'path': '/run/openvswitch', 'type': ''}, 'name': 'ovs-run'}, {'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}, 'name': 'dbus-socket'}, {'hostPath': {'path': '/dev', 'type': 'Directory'}, 'name': 'dev'}, {'hostPath': {'path': '/etc', 'type': 'Directory'}, 'name': 'etc'}, {'hostPath': {'path': '/var', 'type': 'Directory'}, 'name': 'var'}, {'name': 'kube-api-access-m5ch7', 'projected': {'defaultMode': 420, 'sources': [{'serviceAccountToken': {'path': 'token'}}, {'configMap': {'items': [{'key': 'ca.crt', 'path': 'ca.crt'}], 'name': 'kube-root-ca.crt'}}, {'downwardAPI': {'items': [{'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}, 'path': 'namespace'}]}}, {'configMap': {'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}], 'name': 'openshift-service-ca.crt'}}]}}]}}, 'updateStrategy': {'type': 'OnDelete'}}}[0m
+2026-02-12T12:26:43.474465 ocp_resources DaemonSet [32mINFO[0m Wait for DaemonSet utility to deploy all desired pods[0m
+2026-02-12T12:26:43.474787 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: kubernetes.dynamic.client.get  Kwargs: {'field_selector': 'metadata.name==utility', 'namespace': 'cnv-tests-utilities'})[0m
+2026-02-12T12:26:53.459041 timeout_sampler [32mINFO[0m Elapsed time: 9.80672001838684 [0:00:09.806720][0m
+2026-02-12T12:26:53.459376 conftest [32mINFO[0m Executing session fixture: workers_utility_pods[0m
+2026-02-12T12:26:58.219876 conftest [32mINFO[0m Executing session fixture: workers_type[0m
+2026-02-12T12:26:58.732747 ocp_resources Pod [32mINFO[0m Execute ['chroot', '/host', 'bash', '-c', 'systemd-detect-virt'] on utility-982bm (c01-mv-421-qgr9v-worker-0-rgbwd)[0m
+2026-02-12T12:27:00.848956 ocp_resources Pod [32mINFO[0m Execute ['chroot', '/host', 'bash', '-c', 'systemd-detect-virt'] on utility-bv2gr (c01-mv-421-qgr9v-worker-0-gwsf6)[0m
+2026-02-12T12:27:03.238699 ocp_resources Pod [32mINFO[0m Execute ['chroot', '/host', 'bash', '-c', 'systemd-detect-virt'] on utility-c8lbp (c01-mv-421-qgr9v-worker-0-6brx9)[0m
+2026-02-12T12:27:04.797812 tests.conftest [32mINFO[0m Cluster workers are: virtual[0m
+2026-02-12T12:27:04.798100 conftest [32mINFO[0m Executing session fixture: nodes_cpu_architecture[0m
+2026-02-12T12:27:06.415781 pyhelper_utils.shell [32mINFO[0m Running virtctl --kubeconfig /home/mvavrine/cnv/c01-mv-421-qgr9v-data/home/jenkins/rhos-psi.cnv-qe.rhood.us/c01-mv-421/auth/kubeconfig version command[0m
+2026-02-12T12:27:06.415642 conftest [32mINFO[0m Executing session fixture: cluster_info[0m
+2026-02-12T12:27:07.380222 ocp_resources.resource [32mINFO[0m kind: Network api version: config.openshift.io/v1[0m
+2026-02-12T12:27:07.538369 tests.conftest [32mINFO[0m 
+Cluster info:
+	Openshift version: 4.21.0
+	CNV version: 4.21.0
+	HCO image: brew.registry.redhat.io/rh-osbs/iib:1097155
+	OCS version: 4.21.0-98.stable
+	CNI type: OVNKubernetes
+	Workers type: virtual
+	Cluster CPU Architecture: amd64
+	IPv4 cluster: True
+	IPv6 cluster: False
+	Virtctl version: 
+	Client Version: version.Info{GitVersion:"v1.7.0-45-g33ff10241e", GitCommit:"33ff10241e848425ef145a49e450c5d1c0255edd", GitTreeState:"clean", BuildDate:"2026-01-15T09:28:24Z", GoVersion:"go1.24.11 (Red Hat 1.24.11-1.el8_10) X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+	Server Version: version.Info{GitVersion:"v1.7.0-45-g33ff10241e", GitCommit:"33ff10241e848425ef145a49e450c5d1c0255edd", GitTreeState:"clean", BuildDate:"2026-01-15T09:20:24Z", GoVersion:"go1.24.11 (Red Hat 1.24.11-1.el9_6) X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+[0m
+2026-02-12T12:27:07.538590 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-02-12T12:27:07.538702 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-02-12T12:27:07.538771 conftest [32mINFO[0m Executing module fixture: term_handler_scope_module[0m
+2026-02-12T12:27:07.538836 conftest [32mINFO[0m Executing session fixture: term_handler_scope_session[0m
+2026-02-12T12:27:07.538933 conftest [32mINFO[0m Executing session fixture: record_testsuite_property[0m
+2026-02-12T12:27:07.539010 conftest [32mINFO[0m Executing session fixture: junitxml_polarion[0m
+2026-02-12T12:27:07.539092 conftest [32mINFO[0m Executing session fixture: cluster_storage_classes_names[0m
+2026-02-12T12:27:07.539166 conftest [32mINFO[0m Executing session fixture: junitxml_plugin[0m
+2026-02-12T12:27:07.539244 conftest [32mINFO[0m Executing session fixture: hyperconverged_resource_scope_session[0m
+2026-02-12T12:27:07.756879 ocp_resources.resource [32mINFO[0m kind: HyperConverged api version: hco.kubevirt.io/v1beta1[0m
+2026-02-12T12:27:07.948882 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+2026-02-12T12:27:07.948545 conftest [32mINFO[0m Executing session fixture: cluster_sanity_scope_session[0m
+2026-02-12T12:27:07.948746 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-02-12T12:27:07.948798 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-02-12T12:27:07.948845 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-02-12T12:27:09.384782 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-02-12T12:27:10.612793 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>})[0m
+2026-02-12T12:27:27.498636 timeout_sampler [32mINFO[0m Elapsed time: 0.00017213821411132812 [0:00:00.000172][0m
+2026-02-12T12:27:27.499039 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:27:27.498886 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:27:38.818731 timeout_sampler [32mINFO[0m Elapsed time: 10.869536638259888 [0:00:10.869537][0m
+2026-02-12T12:27:38.819496 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+2026-02-12T12:27:38.819099 conftest [32mINFO[0m Executing module fixture: cluster_sanity_scope_module[0m
+2026-02-12T12:27:38.819294 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-02-12T12:27:38.819365 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-02-12T12:27:38.819434 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-02-12T12:27:40.001714 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-02-12T12:27:40.999312 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>})[0m
+2026-02-12T12:27:59.588482 timeout_sampler [32mINFO[0m Elapsed time: 0.0001659393310546875 [0:00:00.000166][0m
+2026-02-12T12:27:59.588700 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:27:59.588629 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:28:11.232221 timeout_sampler [32mINFO[0m Elapsed time: 11.01092004776001 [0:00:11.010920][0m
+2026-02-12T12:28:11.232463 conftest [32mINFO[0m Executing session fixture: ssh_key_tmpdir_scope_session[0m
+2026-02-12T12:28:11.233053 conftest [32mINFO[0m Executing session fixture: generated_ssh_key_for_vm_access[0m
+2026-02-12T12:28:11.320012 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-02-12T12:28:11.320201 conftest [32mINFO[0m Executing function fixture: hco_with_common_instancetypes_disabled[0m
+2026-02-12T12:28:11.539576 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:28:11.539313 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Disabling common-instancetypes deployment via HCO CR[0m
+2026-02-12T12:28:11.546215 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+2026-02-12T12:28:11.546140 utilities.hco [32mINFO[0m Patches: {<ocp_resources.hyperconverged.HyperConverged object at 0x7f2fcf2a2d50>: {'spec': {'commonInstancetypesDeployment': 'Disabled'}}}[0m
+2026-02-12T12:28:11.708827 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-02-12T12:28:11.708951 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': 'Disabled'}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-02-12T12:28:11.918202 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:28:11.918055 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:28:24.032525 timeout_sampler [32mINFO[0m Elapsed time: 11.584348917007446 [0:00:11.584349][0m
+2026-02-12T12:28:24.032727 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 10 seconds. (Function: tests.infrastructure.instance_types.test_common_instancetypes_deployment.get_common_instancetypes  Kwargs: {'admin_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>})[0m
+2026-02-12T12:28:24.032944 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:28:24.032633 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Waiting for common-instancetypes to be absent[0m
+2026-02-12T12:28:24.759011 ocp_resources.resource [32mINFO[0m kind: VirtualMachineClusterInstancetype api version: instancetype.kubevirt.io/v1beta1[0m
+2026-02-12T12:28:35.452467 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:38:33.690919 ocp_resources.resource [32mINFO[0m ResourceEdits: Restoring data for resource HyperConverged kubevirt-hyperconverged --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 50 times][0m
+2026-02-12T12:38:33.691134 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': None}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-02-12T12:38:33.690633 tests.infrastructure.instance_types.test_common_instancetypes_deployment [31mERROR[0m Timeout waiting for common-instancetypes to be absent[0m
+2026-02-12T12:38:34.687171 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:38:34.687052 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:38:47.026145 timeout_sampler [32mINFO[0m Elapsed time: 11.823155403137207 [0:00:11.823155][0m
+_ 1 of 5 completed, 0 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 1 Error, 0 ReRun _
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py F [ 40%]
+
+
+_______________________ test_enable_common_instancetypes _______________________
+
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>
+hco_with_common_instancetypes_enabled = <ocp_resources.hyperconverged.HyperConverged object at 0x7f2fce00dbd0>
+
+    @pytest.mark.polarion("CNV-61256-02")
+    def test_enable_common_instancetypes(admin_client, hco_namespace, hco_with_common_instancetypes_enabled):
+        """
+        Test enabling common-instancetypes deployment.
+    
+        Scenario 2: Enable Common-Instancetypes
+        Preconditions: Common-instancetypes disabled
+        Steps:
+          1. Verify common-instancetypes not deployed
+          2. Edit HCO CR: set commonInstancetypesDeployment: Enabled
+          3. Wait for HCO reconciliation
+          4. Check for common-instancetype resources
+        Expected Result: Common-instancetype resources deployed
+        Priority: P0
+        """
+        LOGGER.info("Verifying common-instancetypes are present after enabling")
+        common_instancetypes = get_common_instancetypes(admin_client=admin_client)
+        assert common_instancetypes, (
+            "Common-instancetypes should be present when enabled, "
+            "but no instancetypes found"
+        )
+    
+        LOGGER.info(f"Found {len(common_instancetypes)} common-instancetypes")
+    
+        LOGGER.info("Verifying HCO spec reflects enabled state")
+        hco_resource = get_hyperconverged_resource(client=admin_client, hco_ns_name=hco_namespace.name)
+        hco_spec = hco_resource.instance.spec
+>       assert hco_spec.get("commonInstancetypesDeployment") == COMMON_INSTANCETYPES_DEPLOYMENT_ENABLED, (
+            f"HCO spec commonInstancetypesDeployment should be {COMMON_INSTANCETYPES_DEPLOYMENT_ENABLED}, "
+            f"but got {hco_spec.get('commonInstancetypesDeployment')}"
+        )
+E       AssertionError: HCO spec commonInstancetypesDeployment should be Enabled, but got None
+E       assert None == 'Enabled'
+E        +  where None = <built-in method get of dict object at 0x7f2fcd94c140>('commonInstancetypesDeployment')
+E        +    where <built-in method get of dict object at 0x7f2fcd94c140> = {'certConfig': {'ca': {'duration': '48h0m0s', 'renewBefore': '24h0m0s'},\n 'server': {'duration': '24h0m0s', 'renewBefo...batchEvictionInterval': '1m0s',\n 'batchEvictionSize': 10,\n 'workloadUpdateMethods': ['LiveMigrate']},\n 'workloads': {}}.get
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py:183: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+
+------------------------------------------- test_enable_common_instancetypes -------------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-02-12T12:38:47.086339 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-02-12T12:38:47.086462 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-02-12T12:38:47.086608 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-02-12T12:38:47.086693 conftest [32mINFO[0m Executing function fixture: hco_with_common_instancetypes_enabled[0m
+2026-02-12T12:38:47.448686 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:38:47.448440 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Enabling common-instancetypes deployment via HCO CR[0m
+2026-02-12T12:38:47.455800 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+2026-02-12T12:38:47.455723 utilities.hco [32mINFO[0m Patches: {<ocp_resources.hyperconverged.HyperConverged object at 0x7f2fce00dbd0>: {'spec': {'commonInstancetypesDeployment': 'Enabled'}}}[0m
+2026-02-12T12:38:47.654588 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-02-12T12:38:47.654715 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': 'Enabled'}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-02-12T12:38:47.859829 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:38:47.859694 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:39:00.044699 timeout_sampler [32mINFO[0m Elapsed time: 11.553141117095947 [0:00:11.553141][0m
+2026-02-12T12:39:00.044889 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 10 seconds. (Function: tests.infrastructure.instance_types.test_common_instancetypes_deployment.get_common_instancetypes  Kwargs: {'admin_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>})[0m
+2026-02-12T12:39:00.045046 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:39:00.044811 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Waiting for common-instancetypes to be present[0m
+2026-02-12T12:39:01.690272 timeout_sampler [32mINFO[0m Elapsed time: 5.269050598144531e-05 [0:00:00.000053][0m
+----------------------------- Captured stderr call -----------------------------
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-02-12T12:39:01.691052 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Verifying common-instancetypes are present after enabling[0m
+2026-02-12T12:39:03.359886 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Found 65 common-instancetypes[0m
+2026-02-12T12:39:03.360017 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Verifying HCO spec reflects enabled state[0m
+_ 2 of 5 completed, 0 Pass, 1 Fail, 0 Skip, 0 XPass, 0 XFail, 1 Error, 0 ReRun _
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py . [ 60%]
+
+_ 3 of 5 completed, 1 Pass, 1 Fail, 0 Skip, 0 XPass, 0 XFail, 1 Error, 0 ReRun _
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py E [ 80%]
+
+
+_______ ERROR at setup of test_common_instancetypes_setting_persistence ________
+
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>
+
+    @pytest.fixture()
+    def hco_with_common_instancetypes_disabled(admin_client, hco_namespace):
+        """
+        Disable common-instancetypes deployment via HCO CR.
+    
+        Yields HCO resource with commonInstancetypesDeployment set to Disabled.
+        Restores original configuration on cleanup.
+        """
+        hco_resource = get_hyperconverged_resource(client=admin_client, hco_ns_name=hco_namespace.name)
+        LOGGER.info("Disabling common-instancetypes deployment via HCO CR")
+    
+        with ResourceEditorValidateHCOReconcile(
+            patches={hco_resource: {"spec": {"commonInstancetypesDeployment": COMMON_INSTANCETYPES_DEPLOYMENT_DISABLED}}},
+            wait_for_reconcile_post_update=True,
+        ):
+>           wait_for_common_instancetypes_state(admin_client=admin_client, expected_present=False)
+
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/infrastructure/instance_types/test_common_instancetypes_deployment.py:66: in wait_for_common_instancetypes_state
+    for sample in sampler:
+                  ^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f2fccf48f50>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 600
+E       Function: tests.infrastructure.instance_types.test_common_instancetypes_deployment.get_common_instancetypes  Kwargs: {'admin_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>}
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+
+------------------------------------ test_common_instancetypes_setting_persistence ------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-02-12T12:39:17.431455 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-02-12T12:39:17.431779 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-02-12T12:39:17.431944 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-02-12T12:39:17.432041 conftest [32mINFO[0m Executing function fixture: hco_with_common_instancetypes_disabled[0m
+2026-02-12T12:39:17.716357 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Disabling common-instancetypes deployment via HCO CR[0m
+2026-02-12T12:39:17.723458 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+2026-02-12T12:39:17.723384 utilities.hco [32mINFO[0m Patches: {<ocp_resources.hyperconverged.HyperConverged object at 0x7f2fce00ee90>: {'spec': {'commonInstancetypesDeployment': 'Disabled'}}}[0m
+2026-02-12T12:39:17.876524 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-02-12T12:39:17.876647 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': 'Disabled'}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-02-12T12:39:18.056364 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:39:18.056191 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:39:30.356457 timeout_sampler [32mINFO[0m Elapsed time: 11.769339799880981 [0:00:11.769340][0m
+2026-02-12T12:39:30.356730 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 10 seconds. (Function: tests.infrastructure.instance_types.test_common_instancetypes_deployment.get_common_instancetypes  Kwargs: {'admin_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>})[0m
+2026-02-12T12:39:30.356910 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-02-12T12:39:30.356620 tests.infrastructure.instance_types.test_common_instancetypes_deployment [32mINFO[0m Waiting for common-instancetypes to be absent[0m
+2026-02-12T12:49:40.056782 ocp_resources.resource [32mINFO[0m ResourceEdits: Restoring data for resource HyperConverged kubevirt-hyperconverged --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 50 times][0m
+2026-02-12T12:49:40.057121 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': None}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-02-12T12:49:40.056554 tests.infrastructure.instance_types.test_common_instancetypes_deployment [31mERROR[0m Timeout waiting for common-instancetypes to be absent[0m
+2026-02-12T12:49:40.942514 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:49:40.942231 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:49:56.633325 timeout_sampler [32mINFO[0m Elapsed time: 14.263895511627197 [0:00:14.263896][0m
+_ 4 of 5 completed, 1 Pass, 1 Fail, 0 Skip, 0 XPass, 0 XFail, 2 Error, 0 ReRun _
+
+tests/deprecated_api/test_deprecation_audit_logs.py E
+
+_____________ ERROR at setup of test_deprecated_apis_in_audit_logs _____________
+
+audit_logs = defaultdict(<class 'list'>, {'c01-mv-421-qgr9v-master-0': ['audit-2026-02-12T00-50-22.588.log', 'audit-2026-02-12T02-0...-2026-02-12T08-55-19.295.log', 'audit-2026-02-12T09-59-41.292.log', 'audit-2026-02-12T11-10-16.450.log', 'audit.log']})
+
+    @pytest.fixture()
+    def deprecated_apis_calls(audit_logs):
+        """Go over control plane nodes audit logs and look for calls using deprecated APIs"""
+        failed_api_calls = defaultdict(list)
+        for node, logs in audit_logs.items():
+>           for audit_log_entry_dict in get_node_audit_log_line_dict(
+                logs=logs, node=node, log_entry=DEPRECATED_API_LOG_ENTRY
+            ):
+
+tests/deprecated_api/test_deprecation_audit_logs.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+utilities/infra.py:868: in get_node_audit_log_line_dict
+    _, deprecated_api_lines = get_node_audit_log_entries(log=log, node=node, log_entry=log_entry)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:280: in wrapper
+    for sample in TimeoutSampler(
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:162: in __iter__
+    yield self.func(*self.func_args, **self.func_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+utilities/infra.py:853: in get_node_audit_log_entries
+    lines = subprocess.getoutput(
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:697: in getoutput
+    return getstatusoutput(cmd, encoding=encoding, errors=errors)[1]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:677: in getstatusoutput
+    data = check_output(cmd, shell=True, text=True, stderr=STDOUT,
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:472: in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:556: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:1207: in communicate
+    stdout = self.stdout.read()
+             ^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:764: in _sigint_handler
+    self.__exit__()
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:760: in __exit__
+    if not self.clean_up():
+           ^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:839: in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/daemonset.py:54: in delete
+    return super().delete(
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:1068: in delete
+    return self.wait_deleted(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:936: in wait_deleted
+    for sample in TimeoutSampler(wait_timeout=timeout, sleep=1, func=lambda: self.exists):
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:163: in __iter__
+    time.sleep(self.sleep)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ocp_resources.daemonset.DaemonSet object at 0x7f2fce00d310>
+signal_received = 2
+_frame = <frame at 0x7f2fcdf69c60, file '/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py', line 180, code __iter__>
+
+    def _sigint_handler(self, signal_received: int, _frame: Any) -> None:
+        self.__exit__()
+>       sys.exit(signal_received)
+E       SystemExit: 2
+
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:765: SystemExit
+---------------------------- Captured stderr setup -----------------------------
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+2026-02-12T12:49:56.645178 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+
+------------------------------------------ test_deprecated_apis_in_audit_logs ------------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-02-12T12:49:56.644501 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-02-12T12:49:56.644660 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-02-12T12:49:56.644764 conftest [32mINFO[0m Executing module fixture: term_handler_scope_module[0m
+2026-02-12T12:49:56.644948 conftest [32mINFO[0m Executing module fixture: cluster_sanity_scope_module[0m
+2026-02-12T12:49:56.645039 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-02-12T12:49:56.645088 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-02-12T12:49:56.645136 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-02-12T12:49:57.972930 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-02-12T12:49:59.202075 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>})[0m
+2026-02-12T12:50:36.167024 timeout_sampler [32mINFO[0m Elapsed time: 0.0002243518829345703 [0:00:00.000224][0m
+2026-02-12T12:50:36.167459 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:50:36.167310 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:50:47.430625 timeout_sampler [32mINFO[0m Elapsed time: 10.756816148757935 [0:00:10.756816][0m
+2026-02-12T12:50:47.430835 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-02-12T12:50:47.430999 conftest [32mINFO[0m Executing function fixture: audit_logs[0m
+2026-02-12T12:50:50.258486 timeout_sampler [32mINFO[0m Waiting for 30 seconds [0:00:30], retry every 10 seconds. (Function: utilities.infra.get_node_audit_log_entries  Kwargs: {'log': 'audit-2026-02-12T00-50-22.588.log', 'node': 'c01-mv-421-qgr9v-master-0', 'log_entry': '"k8s.io/deprecated":"true"'})[0m
+2026-02-12T12:50:50.258231 conftest [32mINFO[0m Executing function fixture: deprecated_apis_calls[0m
+2026-02-12T12:51:22.118916 ocp_resources DaemonSet [32mINFO[0m Delete DaemonSet utility[0m
+2026-02-12T12:51:22.994210 ocp_resources DaemonSet [32mINFO[0m Deleting {'kind': 'DaemonSet', 'apiVersion': 'apps/v1', 'metadata': {'name': 'utility', 'namespace': 'cnv-tests-utilities', 'uid': 'e437303b-0627-4d23-8de5-6f0df81be952', 'resourceVersion': '8813623', 'generation': 1, 'creationTimestamp': '2026-02-12T11:26:43Z', 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'annotations': {'deprecated.daemonset.template.generation': '1'}, 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:43Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'.': {}, 'f:deprecated.daemonset.template.generation': {}}, 'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:revisionHistoryLimit': {}, 'f:selector': {}, 'f:template': {'f:metadata': {'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:containers': {'k:{"name":"utility"}': {'.': {}, 'f:command': {}, 'f:image': {}, 'f:imagePullPolicy': {}, 'f:name': {}, 'f:readinessProbe': {'.': {}, 'f:exec': {'.': {}, 'f:command': {}}, 'f:failureThreshold': {}, 'f:initialDelaySeconds': {}, 'f:periodSeconds': {}, 'f:successThreshold': {}, 'f:timeoutSeconds': {}}, 'f:resources': {'.': {}, 'f:limits': {'.': {}, 'f:cpu': {}, 'f:memory': {}}, 'f:requests': {'.': {}, 'f:cpu': {}, 'f:memory': {}}}, 'f:securityContext': {'.': {}, 'f:privileged': {}, 'f:runAsUser': {}}, 'f:stdin': {}, 'f:stdinOnce': {}, 'f:terminationMessagePath': {}, 'f:terminationMessagePolicy': {}, 'f:tty': {}, 'f:volumeMounts': {'.': {}, 'k:{"mountPath":"/host"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/dev"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/etc"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/run/openvswitch"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/var"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/run/dbus/system_bus_socket"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/var/run/secrets/kubernetes.io/serviceaccount"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}, 'f:readOnly': {}}}}}, 'f:dnsPolicy': {}, 'f:enableServiceLinks': {}, 'f:hostNetwork': {}, 'f:hostPID': {}, 'f:imagePullSecrets': {'.': {}, 'k:{"name":"default-dockercfg-xrlbh"}': {}}, 'f:preemptionPolicy': {}, 'f:priority': {}, 'f:restartPolicy': {}, 'f:schedulerName': {}, 'f:securityContext': {}, 'f:serviceAccount': {}, 'f:serviceAccountName': {}, 'f:terminationGracePeriodSeconds': {}, 'f:tolerations': {}, 'f:volumes': {'.': {}, 'k:{"name":"dbus-socket"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"dev"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"etc"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"host"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"kube-api-access-m5ch7"}': {'.': {}, 'f:name': {}, 'f:projected': {'.': {}, 'f:defaultMode': {}, 'f:sources': {}}}, 'k:{"name":"ovs-run"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"var"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}}}}, 'f:updateStrategy': {'f:type': {}}}}}, {'manager': 'kube-controller-manager', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:52Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:status': {'f:currentNumberScheduled': {}, 'f:desiredNumberScheduled': {}, 'f:numberAvailable': {}, 'f:numberReady': {}, 'f:observedGeneration': {}, 'f:updatedNumberScheduled': {}}}, 'subresource': 'status'}]}, 'spec': {'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'volumes': [{'name': 'host', 'hostPath': {'path': '/', 'type': 'Directory'}}, {'name': 'ovs-run', 'hostPath': {'path': '/run/openvswitch', 'type': ''}}, {'name': 'dbus-socket', 'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}}, {'name': 'dev', 'hostPath': {'path': '/dev', 'type': 'Directory'}}, {'name': 'etc', 'hostPath': {'path': '/etc', 'type': 'Directory'}}, {'name': 'var', 'hostPath': {'path': '/var', 'type': 'Directory'}}, {'name': 'kube-api-access-m5ch7', 'projected': {'sources': [{'serviceAccountToken': {'expirationSeconds': 3600, 'path': 'token'}}, {'configMap': {'name': 'kube-root-ca.crt', 'items': [{'key': 'ca.crt', 'path': 'ca.crt'}]}}, {'downwardAPI': {'items': [{'path': 'namespace', 'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}}]}}, {'configMap': {'name': 'openshift-service-ca.crt', 'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}]}}], 'defaultMode': 420}}], 'containers': [{'name': 'utility', 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'volumeMounts': [{'name': 'host', 'mountPath': '/host'}, {'name': 'kube-api-access-m5ch7', 'readOnly': True, 'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount'}, {'name': 'ovs-run', 'mountPath': '/host/run/openvswitch'}, {'name': 'dbus-socket', 'mountPath': '/run/dbus/system_bus_socket'}, {'name': 'dev', 'mountPath': '/host/dev'}, {'name': 'etc', 'mountPath': '/host/etc'}, {'name': 'var', 'mountPath': '/host/var'}], 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'initialDelaySeconds': 5, 'timeoutSeconds': 1, 'periodSeconds': 5, 'successThreshold': 1, 'failureThreshold': 3}, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'imagePullPolicy': 'IfNotPresent', 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'tty': True}], 'restartPolicy': 'Always', 'terminationGracePeriodSeconds': 30, 'dnsPolicy': 'ClusterFirst', 'serviceAccountName': 'cnv-tests-sa', 'serviceAccount': 'cnv-tests-sa', 'hostNetwork': True, 'hostPID': True, 'securityContext': {}, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'schedulerName': 'default-scheduler', 'tolerations': [{'key': 'node-role.kubernetes.io/master', 'operator': 'Exists', 'effect': 'NoSchedule'}], 'priority': 0, 'enableServiceLinks': True, 'preemptionPolicy': 'PreemptLowerPriority'}}, 'updateStrategy': {'type': 'OnDelete'}, 'revisionHistoryLimit': 10}, 'status': {'currentNumberScheduled': 6, 'numberMisscheduled': 0, 'desiredNumberScheduled': 6, 'numberReady': 6, 'observedGeneration': 1, 'updatedNumberScheduled': 6, 'numberAvailable': 6}}[0m
+2026-02-12T12:51:23.166581 ocp_resources DaemonSet [32mINFO[0m Wait until DaemonSet utility is deleted[0m
+2026-02-12T12:51:23.166722 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)[0m
+2026-02-12T12:51:23.847183 ocp_resources DaemonSet [32mINFO[0m Delete DaemonSet utility[0m
+2026-02-12T12:51:24.295040 ocp_resources DaemonSet [32mINFO[0m Deleting {'kind': 'DaemonSet', 'apiVersion': 'apps/v1', 'metadata': {'name': 'utility', 'namespace': 'cnv-tests-utilities', 'uid': 'e437303b-0627-4d23-8de5-6f0df81be952', 'resourceVersion': '8835812', 'generation': 2, 'creationTimestamp': '2026-02-12T11:26:43Z', 'deletionTimestamp': '2026-02-12T11:51:23Z', 'deletionGracePeriodSeconds': 0, 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'annotations': {'deprecated.daemonset.template.generation': '1'}, 'finalizers': ['foregroundDeletion'], 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:43Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'.': {}, 'f:deprecated.daemonset.template.generation': {}}, 'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:revisionHistoryLimit': {}, 'f:selector': {}, 'f:template': {'f:metadata': {'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:containers': {'k:{"name":"utility"}': {'.': {}, 'f:command': {}, 'f:image': {}, 'f:imagePullPolicy': {}, 'f:name': {}, 'f:readinessProbe': {'.': {}, 'f:exec': {'.': {}, 'f:command': {}}, 'f:failureThreshold': {}, 'f:initialDelaySeconds': {}, 'f:periodSeconds': {}, 'f:successThreshold': {}, 'f:timeoutSeconds': {}}, 'f:resources': {'.': {}, 'f:limits': {'.': {}, 'f:cpu': {}, 'f:memory': {}}, 'f:requests': {'.': {}, 'f:cpu': {}, 'f:memory': {}}}, 'f:securityContext': {'.': {}, 'f:privileged': {}, 'f:runAsUser': {}}, 'f:stdin': {}, 'f:stdinOnce': {}, 'f:terminationMessagePath': {}, 'f:terminationMessagePolicy': {}, 'f:tty': {}, 'f:volumeMounts': {'.': {}, 'k:{"mountPath":"/host"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/dev"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/etc"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/run/openvswitch"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/var"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/run/dbus/system_bus_socket"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/var/run/secrets/kubernetes.io/serviceaccount"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}, 'f:readOnly': {}}}}}, 'f:dnsPolicy': {}, 'f:enableServiceLinks': {}, 'f:hostNetwork': {}, 'f:hostPID': {}, 'f:imagePullSecrets': {'.': {}, 'k:{"name":"default-dockercfg-xrlbh"}': {}}, 'f:preemptionPolicy': {}, 'f:priority': {}, 'f:restartPolicy': {}, 'f:schedulerName': {}, 'f:securityContext': {}, 'f:serviceAccount': {}, 'f:serviceAccountName': {}, 'f:terminationGracePeriodSeconds': {}, 'f:tolerations': {}, 'f:volumes': {'.': {}, 'k:{"name":"dbus-socket"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"dev"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"etc"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"host"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"kube-api-access-m5ch7"}': {'.': {}, 'f:name': {}, 'f:projected': {'.': {}, 'f:defaultMode': {}, 'f:sources': {}}}, 'k:{"name":"ovs-run"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"var"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}}}}, 'f:updateStrategy': {'f:type': {}}}}}, {'manager': 'kube-controller-manager', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:52Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:status': {'f:currentNumberScheduled': {}, 'f:desiredNumberScheduled': {}, 'f:numberAvailable': {}, 'f:numberReady': {}, 'f:observedGeneration': {}, 'f:updatedNumberScheduled': {}}}, 'subresource': 'status'}]}, 'spec': {'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'volumes': [{'name': 'host', 'hostPath': {'path': '/', 'type': 'Directory'}}, {'name': 'ovs-run', 'hostPath': {'path': '/run/openvswitch', 'type': ''}}, {'name': 'dbus-socket', 'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}}, {'name': 'dev', 'hostPath': {'path': '/dev', 'type': 'Directory'}}, {'name': 'etc', 'hostPath': {'path': '/etc', 'type': 'Directory'}}, {'name': 'var', 'hostPath': {'path': '/var', 'type': 'Directory'}}, {'name': 'kube-api-access-m5ch7', 'projected': {'sources': [{'serviceAccountToken': {'expirationSeconds': 3600, 'path': 'token'}}, {'configMap': {'name': 'kube-root-ca.crt', 'items': [{'key': 'ca.crt', 'path': 'ca.crt'}]}}, {'downwardAPI': {'items': [{'path': 'namespace', 'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}}]}}, {'configMap': {'name': 'openshift-service-ca.crt', 'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}]}}], 'defaultMode': 420}}], 'containers': [{'name': 'utility', 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'volumeMounts': [{'name': 'host', 'mountPath': '/host'}, {'name': 'kube-api-access-m5ch7', 'readOnly': True, 'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount'}, {'name': 'ovs-run', 'mountPath': '/host/run/openvswitch'}, {'name': 'dbus-socket', 'mountPath': '/run/dbus/system_bus_socket'}, {'name': 'dev', 'mountPath': '/host/dev'}, {'name': 'etc', 'mountPath': '/host/etc'}, {'name': 'var', 'mountPath': '/host/var'}], 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'initialDelaySeconds': 5, 'timeoutSeconds': 1, 'periodSeconds': 5, 'successThreshold': 1, 'failureThreshold': 3}, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'imagePullPolicy': 'IfNotPresent', 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'tty': True}], 'restartPolicy': 'Always', 'terminationGracePeriodSeconds': 30, 'dnsPolicy': 'ClusterFirst', 'serviceAccountName': 'cnv-tests-sa', 'serviceAccount': 'cnv-tests-sa', 'hostNetwork': True, 'hostPID': True, 'securityContext': {}, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'schedulerName': 'default-scheduler', 'tolerations': [{'key': 'node-role.kubernetes.io/master', 'operator': 'Exists', 'effect': 'NoSchedule'}], 'priority': 0, 'enableServiceLinks': True, 'preemptionPolicy': 'PreemptLowerPriority'}}, 'updateStrategy': {'type': 'OnDelete'}, 'revisionHistoryLimit': 10}, 'status': {'currentNumberScheduled': 6, 'numberMisscheduled': 0, 'desiredNumberScheduled': 6, 'numberReady': 6, 'observedGeneration': 1, 'updatedNumberScheduled': 6, 'numberAvailable': 6}}[0m
+2026-02-12T12:51:24.454310 ocp_resources DaemonSet [32mINFO[0m Wait until DaemonSet utility is deleted[0m
+2026-02-12T12:51:24.604924 timeout_sampler [32mINFO[0m Elapsed time: 7.510185241699219e-05 [0:00:00.000075][0m
+2026-02-12T12:51:24.605043 timeout_sampler [32mINFO[0m Elapsed time: 7.009506225585938e-05 [0:00:00.000070][0m
+2026-02-12T12:51:24.605162 timeout_sampler [32mINFO[0m Elapsed time: 0.0003440380096435547 [0:00:00.000344][0m
+_ 5 of 5 completed, 1 Pass, 1 Fail, 0 Skip, 0 XPass, 0 XFail, 3 Error, 0 ReRun _
+E
+___________ ERROR at teardown of test_deprecated_apis_in_audit_logs ____________
+
+cnv_tests_utilities_namespace = <ocp_resources.namespace.Namespace object at 0x7f2fcf2a2710>
+installing_cnv = False
+
+    @pytest.fixture(scope="session")
+    def cnv_tests_utilities_service_account(cnv_tests_utilities_namespace, installing_cnv):
+        if installing_cnv:
+            yield
+        else:
+>           with ServiceAccount(
+                name=CNV_TEST_SERVICE_ACCOUNT,
+                namespace=cnv_tests_utilities_namespace.name,
+            ) as service_account:
+
+tests/conftest.py:487: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:760: in __exit__
+    if not self.clean_up():
+           ^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:839: in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:1055: in delete
+    if self.exists:
+       ^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:951: in exists
+    return self.instance
+           ^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:1670: in instance
+    return self.retry_cluster_exceptions(func=_instance)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:1141: in retry_cluster_exceptions
+    for sample in sampler:
+                  ^^^^^^^
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:162: in __iter__
+    yield self.func(*self.func_args, **self.func_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:1668: in _instance
+    return self.api.get(name=self.name, namespace=self.namespace)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/kubernetes/dynamic/client.py:112: in get
+    return self.request('get', path, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/kubernetes/dynamic/client.py:55: in inner
+    resp = func(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/kubernetes/dynamic/client.py:277: in request
+    api_response = self.client.call_api(
+.venv/lib/python3.14/site-packages/kubernetes/client/api_client.py:348: in call_api
+    return self.__call_api(resource_path, method,
+.venv/lib/python3.14/site-packages/kubernetes/client/api_client.py:180: in __call_api
+    response_data = self.request(
+.venv/lib/python3.14/site-packages/kubernetes/client/api_client.py:373: in request
+    return self.rest_client.GET(url,
+.venv/lib/python3.14/site-packages/kubernetes/client/rest.py:244: in GET
+    return self.request("GET", url,
+.venv/lib/python3.14/site-packages/kubernetes/client/rest.py:217: in request
+    r = self.pool_manager.request(method, url,
+.venv/lib/python3.14/site-packages/urllib3/_request_methods.py:135: in request
+    return self.request_encode_url(
+.venv/lib/python3.14/site-packages/urllib3/_request_methods.py:182: in request_encode_url
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/urllib3/poolmanager.py:443: in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+.venv/lib/python3.14/site-packages/urllib3/connectionpool.py:464: in _make_request
+    self._validate_conn(conn)
+.venv/lib/python3.14/site-packages/urllib3/connectionpool.py:1093: in _validate_conn
+    conn.connect()
+.venv/lib/python3.14/site-packages/urllib3/connection.py:741: in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+.venv/lib/python3.14/site-packages/urllib3/connection.py:920: in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+.venv/lib/python3.14/site-packages/urllib3/util/ssl_.py:460: in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/urllib3/util/ssl_.py:504: in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/ssl.py:455: in wrap_socket
+    return self.sslsocket_class._create(
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/ssl.py:1076: in _create
+    self.do_handshake()
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/ssl.py:1372: in do_handshake
+    self._sslobj.do_handshake()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ocp_resources.daemonset.DaemonSet object at 0x7f2fce00d310>
+signal_received = 2
+_frame = <frame at 0x7f2fcdbf5990, file '/home/mvavrine/.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/ssl.py', line 1374, code do_handshake>
+
+    def _sigint_handler(self, signal_received: int, _frame: Any) -> None:
+        self.__exit__()
+>       sys.exit(signal_received)
+E       SystemExit: 2
+
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:765: SystemExit
+---------------------------- Captured stderr setup -----------------------------
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+2026-02-12T12:49:56.645178 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+
+------------------------------------------ test_deprecated_apis_in_audit_logs ------------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-02-12T12:49:56.644501 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-02-12T12:49:56.644660 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-02-12T12:49:56.644764 conftest [32mINFO[0m Executing module fixture: term_handler_scope_module[0m
+2026-02-12T12:49:56.644948 conftest [32mINFO[0m Executing module fixture: cluster_sanity_scope_module[0m
+2026-02-12T12:49:56.645039 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-02-12T12:49:56.645088 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-02-12T12:49:56.645136 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-02-12T12:49:57.972930 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-02-12T12:49:59.202075 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f2fd08adbe0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f2fcf2d23f0>})[0m
+2026-02-12T12:50:36.167024 timeout_sampler [32mINFO[0m Elapsed time: 0.0002243518829345703 [0:00:00.000224][0m
+2026-02-12T12:50:36.167459 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-02-12T12:50:36.167310 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-02-12T12:50:47.430625 timeout_sampler [32mINFO[0m Elapsed time: 10.756816148757935 [0:00:10.756816][0m
+2026-02-12T12:50:47.430835 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-02-12T12:50:47.430999 conftest [32mINFO[0m Executing function fixture: audit_logs[0m
+2026-02-12T12:50:50.258486 timeout_sampler [32mINFO[0m Waiting for 30 seconds [0:00:30], retry every 10 seconds. (Function: utilities.infra.get_node_audit_log_entries  Kwargs: {'log': 'audit-2026-02-12T00-50-22.588.log', 'node': 'c01-mv-421-qgr9v-master-0', 'log_entry': '"k8s.io/deprecated":"true"'})[0m
+2026-02-12T12:50:50.258231 conftest [32mINFO[0m Executing function fixture: deprecated_apis_calls[0m
+2026-02-12T12:51:22.118916 ocp_resources DaemonSet [32mINFO[0m Delete DaemonSet utility[0m
+2026-02-12T12:51:22.994210 ocp_resources DaemonSet [32mINFO[0m Deleting {'kind': 'DaemonSet', 'apiVersion': 'apps/v1', 'metadata': {'name': 'utility', 'namespace': 'cnv-tests-utilities', 'uid': 'e437303b-0627-4d23-8de5-6f0df81be952', 'resourceVersion': '8813623', 'generation': 1, 'creationTimestamp': '2026-02-12T11:26:43Z', 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'annotations': {'deprecated.daemonset.template.generation': '1'}, 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:43Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'.': {}, 'f:deprecated.daemonset.template.generation': {}}, 'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:revisionHistoryLimit': {}, 'f:selector': {}, 'f:template': {'f:metadata': {'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:containers': {'k:{"name":"utility"}': {'.': {}, 'f:command': {}, 'f:image': {}, 'f:imagePullPolicy': {}, 'f:name': {}, 'f:readinessProbe': {'.': {}, 'f:exec': {'.': {}, 'f:command': {}}, 'f:failureThreshold': {}, 'f:initialDelaySeconds': {}, 'f:periodSeconds': {}, 'f:successThreshold': {}, 'f:timeoutSeconds': {}}, 'f:resources': {'.': {}, 'f:limits': {'.': {}, 'f:cpu': {}, 'f:memory': {}}, 'f:requests': {'.': {}, 'f:cpu': {}, 'f:memory': {}}}, 'f:securityContext': {'.': {}, 'f:privileged': {}, 'f:runAsUser': {}}, 'f:stdin': {}, 'f:stdinOnce': {}, 'f:terminationMessagePath': {}, 'f:terminationMessagePolicy': {}, 'f:tty': {}, 'f:volumeMounts': {'.': {}, 'k:{"mountPath":"/host"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/dev"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/etc"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/run/openvswitch"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/var"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/run/dbus/system_bus_socket"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/var/run/secrets/kubernetes.io/serviceaccount"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}, 'f:readOnly': {}}}}}, 'f:dnsPolicy': {}, 'f:enableServiceLinks': {}, 'f:hostNetwork': {}, 'f:hostPID': {}, 'f:imagePullSecrets': {'.': {}, 'k:{"name":"default-dockercfg-xrlbh"}': {}}, 'f:preemptionPolicy': {}, 'f:priority': {}, 'f:restartPolicy': {}, 'f:schedulerName': {}, 'f:securityContext': {}, 'f:serviceAccount': {}, 'f:serviceAccountName': {}, 'f:terminationGracePeriodSeconds': {}, 'f:tolerations': {}, 'f:volumes': {'.': {}, 'k:{"name":"dbus-socket"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"dev"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"etc"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"host"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"kube-api-access-m5ch7"}': {'.': {}, 'f:name': {}, 'f:projected': {'.': {}, 'f:defaultMode': {}, 'f:sources': {}}}, 'k:{"name":"ovs-run"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"var"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}}}}, 'f:updateStrategy': {'f:type': {}}}}}, {'manager': 'kube-controller-manager', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:52Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:status': {'f:currentNumberScheduled': {}, 'f:desiredNumberScheduled': {}, 'f:numberAvailable': {}, 'f:numberReady': {}, 'f:observedGeneration': {}, 'f:updatedNumberScheduled': {}}}, 'subresource': 'status'}]}, 'spec': {'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'volumes': [{'name': 'host', 'hostPath': {'path': '/', 'type': 'Directory'}}, {'name': 'ovs-run', 'hostPath': {'path': '/run/openvswitch', 'type': ''}}, {'name': 'dbus-socket', 'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}}, {'name': 'dev', 'hostPath': {'path': '/dev', 'type': 'Directory'}}, {'name': 'etc', 'hostPath': {'path': '/etc', 'type': 'Directory'}}, {'name': 'var', 'hostPath': {'path': '/var', 'type': 'Directory'}}, {'name': 'kube-api-access-m5ch7', 'projected': {'sources': [{'serviceAccountToken': {'expirationSeconds': 3600, 'path': 'token'}}, {'configMap': {'name': 'kube-root-ca.crt', 'items': [{'key': 'ca.crt', 'path': 'ca.crt'}]}}, {'downwardAPI': {'items': [{'path': 'namespace', 'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}}]}}, {'configMap': {'name': 'openshift-service-ca.crt', 'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}]}}], 'defaultMode': 420}}], 'containers': [{'name': 'utility', 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'volumeMounts': [{'name': 'host', 'mountPath': '/host'}, {'name': 'kube-api-access-m5ch7', 'readOnly': True, 'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount'}, {'name': 'ovs-run', 'mountPath': '/host/run/openvswitch'}, {'name': 'dbus-socket', 'mountPath': '/run/dbus/system_bus_socket'}, {'name': 'dev', 'mountPath': '/host/dev'}, {'name': 'etc', 'mountPath': '/host/etc'}, {'name': 'var', 'mountPath': '/host/var'}], 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'initialDelaySeconds': 5, 'timeoutSeconds': 1, 'periodSeconds': 5, 'successThreshold': 1, 'failureThreshold': 3}, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'imagePullPolicy': 'IfNotPresent', 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'tty': True}], 'restartPolicy': 'Always', 'terminationGracePeriodSeconds': 30, 'dnsPolicy': 'ClusterFirst', 'serviceAccountName': 'cnv-tests-sa', 'serviceAccount': 'cnv-tests-sa', 'hostNetwork': True, 'hostPID': True, 'securityContext': {}, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'schedulerName': 'default-scheduler', 'tolerations': [{'key': 'node-role.kubernetes.io/master', 'operator': 'Exists', 'effect': 'NoSchedule'}], 'priority': 0, 'enableServiceLinks': True, 'preemptionPolicy': 'PreemptLowerPriority'}}, 'updateStrategy': {'type': 'OnDelete'}, 'revisionHistoryLimit': 10}, 'status': {'currentNumberScheduled': 6, 'numberMisscheduled': 0, 'desiredNumberScheduled': 6, 'numberReady': 6, 'observedGeneration': 1, 'updatedNumberScheduled': 6, 'numberAvailable': 6}}[0m
+2026-02-12T12:51:23.166581 ocp_resources DaemonSet [32mINFO[0m Wait until DaemonSet utility is deleted[0m
+2026-02-12T12:51:23.166722 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)[0m
+2026-02-12T12:51:23.847183 ocp_resources DaemonSet [32mINFO[0m Delete DaemonSet utility[0m
+2026-02-12T12:51:24.295040 ocp_resources DaemonSet [32mINFO[0m Deleting {'kind': 'DaemonSet', 'apiVersion': 'apps/v1', 'metadata': {'name': 'utility', 'namespace': 'cnv-tests-utilities', 'uid': 'e437303b-0627-4d23-8de5-6f0df81be952', 'resourceVersion': '8835812', 'generation': 2, 'creationTimestamp': '2026-02-12T11:26:43Z', 'deletionTimestamp': '2026-02-12T11:51:23Z', 'deletionGracePeriodSeconds': 0, 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'annotations': {'deprecated.daemonset.template.generation': '1'}, 'finalizers': ['foregroundDeletion'], 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:43Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'.': {}, 'f:deprecated.daemonset.template.generation': {}}, 'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:revisionHistoryLimit': {}, 'f:selector': {}, 'f:template': {'f:metadata': {'f:labels': {'.': {}, 'f:cnv-test': {}, 'f:tier': {}}}, 'f:spec': {'f:containers': {'k:{"name":"utility"}': {'.': {}, 'f:command': {}, 'f:image': {}, 'f:imagePullPolicy': {}, 'f:name': {}, 'f:readinessProbe': {'.': {}, 'f:exec': {'.': {}, 'f:command': {}}, 'f:failureThreshold': {}, 'f:initialDelaySeconds': {}, 'f:periodSeconds': {}, 'f:successThreshold': {}, 'f:timeoutSeconds': {}}, 'f:resources': {'.': {}, 'f:limits': {'.': {}, 'f:cpu': {}, 'f:memory': {}}, 'f:requests': {'.': {}, 'f:cpu': {}, 'f:memory': {}}}, 'f:securityContext': {'.': {}, 'f:privileged': {}, 'f:runAsUser': {}}, 'f:stdin': {}, 'f:stdinOnce': {}, 'f:terminationMessagePath': {}, 'f:terminationMessagePolicy': {}, 'f:tty': {}, 'f:volumeMounts': {'.': {}, 'k:{"mountPath":"/host"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/dev"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/etc"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/run/openvswitch"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/host/var"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/run/dbus/system_bus_socket"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}}, 'k:{"mountPath":"/var/run/secrets/kubernetes.io/serviceaccount"}': {'.': {}, 'f:mountPath': {}, 'f:name': {}, 'f:readOnly': {}}}}}, 'f:dnsPolicy': {}, 'f:enableServiceLinks': {}, 'f:hostNetwork': {}, 'f:hostPID': {}, 'f:imagePullSecrets': {'.': {}, 'k:{"name":"default-dockercfg-xrlbh"}': {}}, 'f:preemptionPolicy': {}, 'f:priority': {}, 'f:restartPolicy': {}, 'f:schedulerName': {}, 'f:securityContext': {}, 'f:serviceAccount': {}, 'f:serviceAccountName': {}, 'f:terminationGracePeriodSeconds': {}, 'f:tolerations': {}, 'f:volumes': {'.': {}, 'k:{"name":"dbus-socket"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"dev"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"etc"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"host"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"kube-api-access-m5ch7"}': {'.': {}, 'f:name': {}, 'f:projected': {'.': {}, 'f:defaultMode': {}, 'f:sources': {}}}, 'k:{"name":"ovs-run"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}, 'k:{"name":"var"}': {'.': {}, 'f:hostPath': {'.': {}, 'f:path': {}, 'f:type': {}}, 'f:name': {}}}}}, 'f:updateStrategy': {'f:type': {}}}}}, {'manager': 'kube-controller-manager', 'operation': 'Update', 'apiVersion': 'apps/v1', 'time': '2026-02-12T11:26:52Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:status': {'f:currentNumberScheduled': {}, 'f:desiredNumberScheduled': {}, 'f:numberAvailable': {}, 'f:numberReady': {}, 'f:observedGeneration': {}, 'f:updatedNumberScheduled': {}}}, 'subresource': 'status'}]}, 'spec': {'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'volumes': [{'name': 'host', 'hostPath': {'path': '/', 'type': 'Directory'}}, {'name': 'ovs-run', 'hostPath': {'path': '/run/openvswitch', 'type': ''}}, {'name': 'dbus-socket', 'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}}, {'name': 'dev', 'hostPath': {'path': '/dev', 'type': 'Directory'}}, {'name': 'etc', 'hostPath': {'path': '/etc', 'type': 'Directory'}}, {'name': 'var', 'hostPath': {'path': '/var', 'type': 'Directory'}}, {'name': 'kube-api-access-m5ch7', 'projected': {'sources': [{'serviceAccountToken': {'expirationSeconds': 3600, 'path': 'token'}}, {'configMap': {'name': 'kube-root-ca.crt', 'items': [{'key': 'ca.crt', 'path': 'ca.crt'}]}}, {'downwardAPI': {'items': [{'path': 'namespace', 'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}}]}}, {'configMap': {'name': 'openshift-service-ca.crt', 'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}]}}], 'defaultMode': 420}}], 'containers': [{'name': 'utility', 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'volumeMounts': [{'name': 'host', 'mountPath': '/host'}, {'name': 'kube-api-access-m5ch7', 'readOnly': True, 'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount'}, {'name': 'ovs-run', 'mountPath': '/host/run/openvswitch'}, {'name': 'dbus-socket', 'mountPath': '/run/dbus/system_bus_socket'}, {'name': 'dev', 'mountPath': '/host/dev'}, {'name': 'etc', 'mountPath': '/host/etc'}, {'name': 'var', 'mountPath': '/host/var'}], 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'initialDelaySeconds': 5, 'timeoutSeconds': 1, 'periodSeconds': 5, 'successThreshold': 1, 'failureThreshold': 3}, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'imagePullPolicy': 'IfNotPresent', 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'tty': True}], 'restartPolicy': 'Always', 'terminationGracePeriodSeconds': 30, 'dnsPolicy': 'ClusterFirst', 'serviceAccountName': 'cnv-tests-sa', 'serviceAccount': 'cnv-tests-sa', 'hostNetwork': True, 'hostPID': True, 'securityContext': {}, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'schedulerName': 'default-scheduler', 'tolerations': [{'key': 'node-role.kubernetes.io/master', 'operator': 'Exists', 'effect': 'NoSchedule'}], 'priority': 0, 'enableServiceLinks': True, 'preemptionPolicy': 'PreemptLowerPriority'}}, 'updateStrategy': {'type': 'OnDelete'}, 'revisionHistoryLimit': 10}, 'status': {'currentNumberScheduled': 6, 'numberMisscheduled': 0, 'desiredNumberScheduled': 6, 'numberReady': 6, 'observedGeneration': 1, 'updatedNumberScheduled': 6, 'numberAvailable': 6}}[0m
+2026-02-12T12:51:24.454310 ocp_resources DaemonSet [32mINFO[0m Wait until DaemonSet utility is deleted[0m
+2026-02-12T12:51:24.604924 timeout_sampler [32mINFO[0m Elapsed time: 7.510185241699219e-05 [0:00:00.000075][0m
+2026-02-12T12:51:24.605043 timeout_sampler [32mINFO[0m Elapsed time: 7.009506225585938e-05 [0:00:00.000070][0m
+2026-02-12T12:51:24.605162 timeout_sampler [32mINFO[0m Elapsed time: 0.0003440380096435547 [0:00:00.000344][0m
+--------------------------- Captured stderr teardown ---------------------------
+
+TEST: test_deprecated_apis_in_audit_logs [setup] STATUS: [0;31mERROR[0m
+2026-02-12T12:51:24.740060 ocp_resources DaemonSet [32mINFO[0m Delete DaemonSet utility[0m
+audit_logs = defaultdict(<class 'list'>, {'c01-mv-421-qgr9v-master-0': ['audit-2026-02-12T00-50-22.588.log', 'audit-2026-02-12T02-0...-2026-02-12T08-55-19.295.log', 'audit-2026-02-12T09-59-41.292.log', 'audit-2026-02-12T11-10-16.450.log', 'audit.log']})
+
+    @pytest.fixture()
+    def deprecated_apis_calls(audit_logs):
+        """Go over control plane nodes audit logs and look for calls using deprecated APIs"""
+        failed_api_calls = defaultdict(list)
+        for node, logs in audit_logs.items():
+>           for audit_log_entry_dict in get_node_audit_log_line_dict(
+                logs=logs, node=node, log_entry=DEPRECATED_API_LOG_ENTRY
+            ):
+
+tests/deprecated_api/test_deprecation_audit_logs.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+utilities/infra.py:868: in get_node_audit_log_line_dict
+    _, deprecated_api_lines = get_node_audit_log_entries(log=log, node=node, log_entry=log_entry)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:280: in wrapper
+    for sample in TimeoutSampler(
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:162: in __iter__
+    yield self.func(*self.func_args, **self.func_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+utilities/infra.py:853: in get_node_audit_log_entries
+    lines = subprocess.getoutput(
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:697: in getoutput
+    return getstatusoutput(cmd, encoding=encoding, errors=errors)[1]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:677: in getstatusoutput
+    data = check_output(cmd, shell=True, text=True, stderr=STDOUT,
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:472: in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:556: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../.local/share/uv/python/cpython-3.14.0-linux-x86_64-gnu/lib/python3.14/subprocess.py:1207: in communicate
+    stdout = self.stdout.read()
+             ^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:764: in _sigint_handler
+    self.__exit__()
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:760: in __exit__
+    if not self.clean_up():
+           ^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:839: in clean_up
+    return self.delete(wait=wait, timeout=timeout or self.delete_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/daemonset.py:54: in delete
+    return super().delete(
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:1068: in delete
+    return self.wait_deleted(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:936: in wait_deleted
+    for sample in TimeoutSampler(wait_timeout=timeout, sleep=1, func=lambda: self.exists):
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:163: in __iter__
+    time.sleep(self.sleep)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ocp_resources.daemonset.DaemonSet object at 0x7f2fce00d310>
+signal_received = 2
+_frame = <frame at 0x7f2fcdf69c60, file '/home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py', line 180, code __iter__>
+
+    def _sigint_handler(self, signal_received: int, _frame: Any) -> None:
+        self.__exit__()
+>       sys.exit(signal_received)
+E       SystemExit: 2
+
+.venv/lib/python3.14/site-packages/ocp_resources/resource.py:765: SystemExit
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+2026-02-12T12:51:24.885075 ocp_resources DaemonSet [33mWARNING[0m Resource DaemonSet utility was not found, and wasn't deleted[0m
+2026-02-12T12:51:24.885252 ocp_resources ServiceAccount [32mINFO[0m Delete ServiceAccount cnv-tests-sa[0m
+2026-02-12T12:51:25.056046 ocp_resources DaemonSet [32mINFO[0m Delete DaemonSet utility[0m
+2026-02-12T12:51:25.205464 ocp_resources DaemonSet [33mWARNING[0m Resource DaemonSet utility was not found, and wasn't deleted[0m
+                                                                         [100%]

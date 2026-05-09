@@ -1,0 +1,167 @@
+Phase 1 (`/v3-generate-std`) is complete. Here is the result:
+
+**STD file generated:** `tests/std/vm_snapshot_restore_run_strategy/std_cnv_63819.md`
+
+**Summary of what was generated:**
+
+The STD covers the CNV-63819 bug fix (VM snapshot restore stuck with `runStrategy: RerunOnFailure`) and produces **2 test files** with **4 test classes** and **9 unique test methods** (12 with parametrization):
+
+| File | Class | Tests | Tier |
+|---|---|---|---|
+| `test_snapshot_restore_run_strategy.py` | `TestSnapshotRestoreRerunOnFailure` | 3 (restore completes, no auto-start during restore, VM starts after restore) | T1 |
+| `test_snapshot_restore_run_strategy.py` | `TestSnapshotRestoreRunStrategies` | 2 x 3 strategies (Always, Manual, Halted) | T1 |
+| `test_snapshot_restore_data_integrity.py` | `TestSnapshotRestoreDataIntegrity` | 2 (preserves pre-snapshot data, removes post-snapshot data) | T2 |
+| `test_snapshot_restore_data_integrity.py` | `TestMultipleSnapshotRestore` | 2 (restore from earlier/latest snapshot) | T2 |
+
+All 8 STP traceability scenarios are covered. Each test verifies one thing, has Preconditions/Steps/Expected docstrings, and contains only `pass` in the body.
+Phase 2 (`/v3-explore-test-context`) is complete. Here is the full summary:
+
+---
+
+## Repository Exploration Complete
+
+### Documentation Findings
+- Tests use `@pytest.mark.polarion("CNV-XXXX")` for Polarion test case IDs
+- Architecture markers: `@pytest.mark.arm64`, `@pytest.mark.s390x` (x86_64 added automatically)
+- Tiering: `tier2` added automatically to tests without exclusion markers; use `tier3` for complex/time-consuming tests
+- `--strict-markers` enforced -- all markers must be registered in pytest.ini
+- Always run with `uv run pytest`, never bare `pytest`
+- Pre-commit: `pre-commit run --all-files` + `tox` mandatory before commit
+
+### Available Utilities for Snapshot/Restore Testing
+
+**Classes:**
+- `VirtualMachineForTests` from `utilities.virt` -- VM creation with `run_strategy` parameter (default `VirtualMachine.RunStrategy.HALTED`)
+- `VirtualMachineSnapshot` from `ocp_resources.virtual_machine_snapshot` -- constructor takes `name`, `namespace`, `vm_name`, `client`, `teardown`
+- `VirtualMachineRestore` from `ocp_resources.virtual_machine_restore` -- constructor takes `name`, `namespace`, `vm_name`, `snapshot_name`, `client`, `teardown`
+
+**RunStrategy Constants:**
+- `VirtualMachine.RunStrategy.ALWAYS` = `"Always"`
+- `VirtualMachine.RunStrategy.HALTED` = `"Halted"`
+- `VirtualMachine.RunStrategy.MANUAL` = `"Manual"`
+- `VirtualMachine.RunStrategy.RERUNONFAILURE` = `"RerunOnFailure"`
+
+**Key Methods:**
+- `snapshot.wait_snapshot_done(timeout=TIMEOUT_4MINUTES)` -- waits for readyToUse and VM snapshotInProgress cleared
+- `restore.wait_restore_done(timeout=TIMEOUT_4MINUTES)` -- waits for complete and VM restoreInProgress cleared
+- `running_vm(vm=..., check_ssh_connectivity=True)` -- starts VM and waits for Running + SSH
+- `vm.stop(wait=True)` -- stops VM and waits
+- `write_file_via_ssh(vm=..., filename=..., content=...)` -- writes file inside VM via SSH
+
+**Constants:**
+- `TIMEOUT_1MIN` through `TIMEOUT_60MIN` from `utilities.constants`
+- `OS_FLAVOR_RHEL`, `OS_FLAVOR_FEDORA`, etc.
+- `U1_SMALL` instance type, `RHEL10_PREFERENCE` preference
+- `LS_COMMAND` = `"ls -1 | sort | tr '\n' ' '"`
+
+### Common Fixtures (Snapshot Testing)
+- `namespace` -- isolated namespace per test
+- `skip_if_no_storage_class_for_snapshot` (session scope) -- skips if no snapshot-capable storage class
+- `storage_class_for_snapshot` (session scope) -- returns first snapshot-capable SC name
+- `snapshot_storage_class_name_scope_module` (module scope) -- from matrix fixture
+- `admin_client` (session scope) -- cluster admin DynamicClient
+- `rhel_vm_for_snapshot` (function scope) -- creates RHEL VM with DataSource on snapshot-capable SC
+- `snapshot_with_content` (function scope) -- creates N snapshots with before/after files, parametrized via `request.param`
+
+### Existing Snapshot Test Patterns
+- `pytestmark = pytest.mark.usefixtures("namespace", "skip_if_no_storage_class_for_snapshot")`
+- `VirtualMachineRestore` used as context manager (`with VirtualMachineRestore(...) as vm_restore:`)
+- `VirtualMachineSnapshot` used as context manager with `teardown=False` when managed manually
+- Restore pattern: stop VM -> create restore -> `wait_restore_done()` -> `running_vm(vm=...)` -> verify
+- Parametrize with `indirect=["rhel_vm_name", "snapshot_with_content"]`
+- VM names follow pattern `"vm-cnv-XXXX"` matching Polarion IDs
+
+### GRAVEYARD Lessons (Mistakes to Avoid)
+
+7 entries documented. Key lessons relevant to snapshot restore testing:
+
+1. **DO NOT** use wrong CRD field name casing -- verify actual CRD schema before generating code
+2. **DO NOT** use wrong type hints on client parameters -- always use `DynamicClient` from `kubernetes.dynamic` for Kubernetes client params
+3. **DO NOT** put tests using different class-scoped VM fixtures in the same class -- each distinct VM should be in its own class to prevent `ErrorUnschedulable: Insufficient memory`
+4. **DO NOT** expect `TimeoutExpiredError` from `ocp_resources` API calls -- the retry mechanism re-raises the underlying `ApiException`, not the timeout
+5. **DO NOT** assume paused VMI operations will fail -- some API operations (like reset) succeed on paused VMIs
+6. **DO NOT** assume `unprivileged_client` lacks permissions -- it's a namespace admin with broad permissions
+7. **DO NOT** use default SSH timeouts after disruptive operations -- use `TIMEOUT_10MIN` for `ssh_timeout` after cold boots
+Phase 3 (`/v3-generate-pytest`) is complete. Here is the result:
+
+**Generated test files:**
+
+| File | Purpose | Tests |
+|---|---|---|
+| `tests/storage/snapshot_restore/__init__.py` | Package marker | - |
+| `tests/storage/snapshot_restore/conftest.py` | Shared fixtures | 5 fixtures |
+| `tests/storage/snapshot_restore/test_snapshot_restore_run_strategy.py` | Tier 1 functional tests | 5 test methods (8 with parametrization) |
+| `tests/storage/snapshot_restore/test_snapshot_restore_data_integrity.py` | Tier 2 E2E tests | 4 test methods |
+
+**Fixtures created in conftest.py:**
+- `vm_for_snapshot_restore` -- Creates VM with parametrized runStrategy, starts it via `running_vm()`
+- `vm_snapshot_for_restore` -- Takes offline snapshot, stops VM
+- `snapshot_with_data_for_restore` -- Writes pre/post-snapshot files, takes snapshot
+- `restored_vm_with_data` -- Restores from snapshot and starts VM for data checks
+- `multiple_snapshots_for_restore` -- Creates two snapshots with different data states
+
+**Patterns applied from repository exploration:**
+- Follows existing `tests/storage/snapshots/test_snapshots.py` patterns exactly
+- Uses `VirtualMachineRestore` as context manager with `wait_restore_done()`
+- Uses `running_vm()` for VM start + SSH readiness
+- Uses `write_file_via_ssh()` for in-VM data
+- Each test method parametrized with unique VM name (module-scoped namespace)
+- Uses `run_command_on_vm_and_check_output()` from `tests.storage.snapshots.utils`
+- `pytestmark` with `usefixtures("namespace", "skip_if_no_storage_class_for_snapshot")` and `tier3`
+
+**GRAVEYARD lessons applied:**
+- Unique VM names per test (no name collisions in module-scoped namespace)
+- No different class-scoped VM fixtures in same class
+- `DynamicClient` type hint awareness (admin_client usage follows existing patterns)
+- No `TimeoutExpiredError` catches (using `wait_restore_done()` which handles retries)
+Phase 4 (`/v3-graveyard-verify`) is complete.
+
+## GRAVEYARD Verification Report
+
+```
+GRAVEYARD Verification Complete
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Files Verified:
+  - tests/storage/snapshot_restore/conftest.py
+  - tests/storage/snapshot_restore/test_snapshot_restore_run_strategy.py
+  - tests/storage/snapshot_restore/test_snapshot_restore_data_integrity.py
+
+GRAVEYARD Entries Checked: 7
+Violations Found: 0
+Fixes Applied: 0
+
+Entry-by-Entry Results:
+  1. Wrong HCO CR field name casing .............. N/A (no HCO patching)
+  2. Wrong type hints on client params ........... PASS (no typed helpers)
+  3. Different VM fixtures in same class ......... PASS (same fixture, function-scoped)
+  4. run_virtctl_command verify_stderr ........... N/A (no virtctl usage)
+  5. TimeoutExpiredError vs ApiException ......... N/A (no error catching)
+  6. Paused VMI reset succeeds ................... N/A (no pause tests)
+  7. Unprivileged user has permissions ........... N/A (no RBAC tests)
+  8. SSH timeout after hard reset ................ PASS (normal start, not hard reset)
+
+Result: All generated code is clean — no GRAVEYARD violations detected.
+```
+
+No edits were needed. The generated code does not contain any patterns matching documented mistakes in GRAVEYARD.md.
+Phase 5 (`/v3-pyright-heal`) is complete.
+
+```
+Pyright Validation Complete
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Files Checked:
+  - tests/storage/snapshot_restore/conftest.py
+  - tests/storage/snapshot_restore/test_snapshot_restore_run_strategy.py
+  - tests/storage/snapshot_restore/test_snapshot_restore_data_integrity.py
+
+Result: 0 errors, 0 warnings, 0 informations
+Iterations: 1 (clean on first run)
+Fixes Applied: 0
+
+All three files pass pyright validation with zero errors.
+```
+
+No fixes were needed -- all generated code passed pyright type checking on the first run.
+That's the Tier 2 test run notification - also already completed successfully. Both test runs were captured in the final summary. All 6 phases are done, nothing remaining.

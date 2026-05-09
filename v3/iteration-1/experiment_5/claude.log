@@ -1,0 +1,208 @@
+Phase 1 is complete. Here is the summary:
+
+---
+
+**Phase 1: Generate STD - Complete**
+
+**Input STP:** `/home/fedora/thesis/stps/5.md` (StorageProfile snapshotClass Not Honored for VM Snapshot)
+
+**Generated STD file:**
+```
+tests/std/storageprofile_snapshot_class/std_cnv_61266.md
+```
+
+**Contents:** 3 test stubs in one class (`TestStorageProfileSnapshotClass`) covering:
+
+| # | Test Method | Scenario | Priority |
+|---|-------------|----------|----------|
+| 1 | `test_snapshot_uses_storageprofile_snapshot_class` | Verify VMSnapshot uses snapshotClass from StorageProfile | P0 |
+| 2 | `test_snapshot_falls_back_to_label_based_selection` | Verify fallback to label-based selection when no snapshotClass set | P0 |
+| 3 | `test_restore_vm_from_snapshot_with_storageprofile_snapshot_class` | Verify VM restore works with StorageProfile-specified snapshotClass | P1 |
+
+**Note:** STP Scenario 4 (Multiple Storage Classes, P2/Tier 2) was intentionally excluded from this Tier 1 STD as it is a separate tier.
+
+**Stopping here as instructed.** No further phases will be executed.
+Phase 2 is complete. Here is the full exploration summary:
+
+---
+
+## Repository Exploration Complete
+
+### Documentation & Markers (pytest.ini)
+
+**Architecture markers:** `arm64`, `x86_64`, `s390x`
+**Team markers:** `storage`, `virt`, `network`, `iuo`, etc.
+**Tier markers:** `tier2`, `tier3` (no `tier1`), `gating`
+**Test ID marker:** `@pytest.mark.polarion("CNV-XXXX")`
+**Snapshot tests use:** `@pytest.mark.usefixtures("skip_if_no_storage_class_for_snapshot")`
+
+---
+
+### Available Utilities (Relevant to This Feature)
+
+**Classes:**
+- `VirtualMachineForTests` (`utilities/virt.py:204`) - extends `VirtualMachine`, main VM creation helper
+- `StorageProfile` (`ocp_resources.storage_profile`) - has `.snapshotclass` property returning `instance.status.get("snapshotClass")`
+- `VolumeSnapshot` (`ocp_resources.volume_snapshot`) - has `volume_snapshot_class_name` constructor param, accessible via `instance.spec.volumeSnapshotClassName`
+- `VolumeSnapshotClass` (`ocp_resources.volume_snapshot_class`) - has `driver` field, matches StorageClass `provisioner`
+- `VirtualMachineSnapshot` (`ocp_resources.virtual_machine_snapshot`) - constructor: `name`, `namespace`, `vm_name`, `client`, `teardown`
+- `VirtualMachineRestore` (`ocp_resources.virtual_machine_restore`) - constructor: `name`, `namespace`, `vm_name`, `snapshot_name`, `client`
+- `ResourceEditor` (`ocp_resources.resource`) - used to patch resources (e.g., StorageProfile spec)
+
+**Key Methods:**
+- `VirtualMachineSnapshot.wait_snapshot_done(timeout)` - waits for snapshot readyToUse=True AND VM snapshotInProgress=None
+- `VirtualMachineSnapshot.wait_ready_to_use(timeout)` - waits for readyToUse status
+- `VirtualMachineRestore.wait_restore_done(timeout)` - waits for restore complete=True AND VM restoreInProgress=None
+- `running_vm(vm)` (`utilities/virt.py:1707`) - starts VM and waits for running + SSH
+- `wait_for_running_vm(vm, ssh_timeout)` (`utilities/virt.py:1673`) - waits for VM to be running with SSH
+- `is_snapshot_supported_by_sc(sc_name, client)` (`utilities/storage.py:758`) - checks if SC supports snapshots by matching VolumeSnapshotClass driver to SC provisioner
+- `vm_snapshot(vm, name)` (`utilities/storage.py:1115`) - context manager: stops VM, creates snapshot, waits, starts VM
+- `wait_for_volume_snapshot_ready_to_use(namespace, name)` (`utilities/storage.py:1006`) - waits for VolumeSnapshot readyToUse
+
+**Constants (`utilities/constants.py`):**
+- `TIMEOUT_1MIN=60`, `TIMEOUT_2MIN=120`, `TIMEOUT_5MIN=300`, `TIMEOUT_10MIN=600`, `TIMEOUT_30MIN=1800`
+
+---
+
+### Common Fixtures (Snapshot-Related)
+
+- `namespace` - function-scoped namespace (from `tests/conftest.py`)
+- `admin_client` - session-scoped cluster admin client
+- `unprivileged_client` - namespace-admin client
+- `storage_class_for_snapshot` - finds first snapshot-capable SC from `py_config["storage_class_matrix"]`
+- `skip_if_no_storage_class_for_snapshot` - skips test if no snapshot-capable SC
+- `storage_class_matrix_snapshot_matrix__module__` - module-scoped parametrized SC matrix
+- `snapshot_storage_class_name_scope_module` - returns SC name from matrix
+
+---
+
+### Import Patterns (Snapshot Tests)
+
+```python
+from ocp_resources.virtual_machine_snapshot import VirtualMachineSnapshot
+from ocp_resources.virtual_machine_restore import VirtualMachineRestore
+from ocp_resources.volume_snapshot import VolumeSnapshot
+from ocp_resources.volume_snapshot_class import VolumeSnapshotClass
+from ocp_resources.storage_profile import StorageProfile
+from ocp_resources.storage_class import StorageClass
+from ocp_resources.resource import ResourceEditor
+from utilities.virt import VirtualMachineForTests, running_vm
+from utilities.constants import TIMEOUT_10MIN
+```
+
+---
+
+### Test Structure Conventions (from `tests/storage/snapshots/`)
+
+- Module-level `pytestmark` for shared usefixtures
+- `VirtualMachineSnapshot` used as context manager (`with ... as snapshot:`)
+- `VirtualMachineRestore` used as context manager
+- Snapshots wait via `wait_snapshot_done()` or `wait_ready_to_use()`
+- Restores wait via `wait_restore_done()`
+- VMs stopped before offline snapshot/restore, then `running_vm()` after
+- `ResourceEditor` used to patch StorageProfile spec (see `tests/storage/checkups/conftest.py:203`)
+
+---
+
+### GRAVEYARD Lessons (7 Entries - Mistakes to Avoid)
+
+| # | Category | DO NOT | DO INSTEAD |
+|---|----------|--------|------------|
+| 1 | ResourceError | Assume HCO CRD field names follow camelCase | Verify actual CRD schema with `kubectl get crd ... -o json` |
+| 2 | TypeError | Type `admin_client` as `list[...]` or `object` | Always use `DynamicClient` from `kubernetes.dynamic` |
+| 3 | ResourceError | Put tests with different class-scoped VM fixtures in same class | Separate classes per distinct VM fixture to avoid scheduling failures |
+| 4 | AssertionError | Use `run_virtctl_command` with default `verify_stderr=True` | Pass `verify_stderr=False` for virtctl commands that log to stderr |
+| 5 | TypeError | Expect `TimeoutExpiredError` from ocp_resources API calls | Catch `ApiException` - retry layer unwraps timeout and re-raises raw exception |
+| 6 | LogicError | Assume reset on paused VMI raises an error | Hard reset works on paused VMIs - it's a hardware-level operation |
+| 7 | TimeoutError | Use default `ssh_timeout` after hard reset | Use `TIMEOUT_10MIN` for SSH after cold-boot operations |
+
+**Key takeaway for this feature:** Entry #5 is directly relevant - if writing negative tests expecting API errors from snapshot/restore operations, catch `ApiException`, not `TimeoutExpiredError`. Entry #3 is relevant - don't put tests using different VM fixtures in the same class.
+
+---
+
+Phase 2 exploration is complete. No further phases will be executed as instructed.
+Phase 3 is complete. Here is the summary:
+
+---
+
+**Phase 3: Generate pytest code - Complete**
+
+**Generated files:**
+
+| File | Description |
+|------|-------------|
+| `tests/storage/snapshots/test_storageprofile_snapshot_class.py` | Test file with 3 tests in 2 classes |
+| `tests/storage/snapshots/conftest.py` | Updated with `storageprofile_with_snapshot_class` fixture |
+
+**Test structure:**
+
+```
+TestStorageProfileSnapshotClassHonored (2 tests):
+  - test_snapshot_uses_storageprofile_snapshot_class
+    -> Creates VMSnapshot, verifies VolumeSnapshot uses the snapshotClass from StorageProfile
+  - test_restore_vm_from_snapshot_with_storageprofile_snapshot_class
+    -> Creates snapshot with SP snapshotClass, restores VM, verifies VM is Running + SSH
+
+TestStorageProfileSnapshotClassFallback (1 test):
+  - test_snapshot_falls_back_to_label_based_selection
+    -> Creates VMSnapshot without snapshotClass in SP, verifies fallback to driver-matching VSC
+```
+
+**Key design decisions:**
+- Split into 2 classes per GRAVEYARD lesson #3 (different preconditions = different classes)
+- `storageprofile_with_snapshot_class` fixture uses `ResourceEditor` to patch `spec.snapshotClass` on the `StorageProfile`, restoring on teardown
+- Uses `DynamicClient` type hints per GRAVEYARD lesson #2
+- Reuses existing fixtures: `rhel_vm_for_snapshot`, `skip_if_no_storage_class_for_snapshot`, `snapshot_storage_class_name_scope_module`
+- Parametrizes `rhel_vm_name` indirectly (required by `rhel_vm_for_snapshot` fixture chain)
+- 2 helper functions: `get_volume_snapshot_class_for_sc_provisioner` and `get_volume_snapshot_class_name_from_vm_snapshot`
+
+**Stopping here as instructed.** No further phases will be executed.
+Phase 4 is complete. Here is the summary:
+
+---
+
+**Phase 4: GRAVEYARD Verification - Complete**
+
+```
+GRAVEYARD Entries Checked:  7
+Violations Found:           0
+Fixes Applied:              0
+```
+
+**Detailed Results:**
+
+- **Entry #1 (HCO field casing):** Not applicable -- code patches `StorageProfile`, not HCO CR
+- **Entry #2 (DynamicClient type hints):** Already correct -- `from kubernetes.dynamic import DynamicClient` used in both helper functions
+- **Entry #3 (Different VM fixtures in same class):** Already correct -- tests split into two classes, both using the same `rhel_vm_for_snapshot` fixture
+- **Entry #4 (virtctl stderr):** Not applicable -- no `run_virtctl_command` usage
+- **Entry #5 (ApiException vs TimeoutExpiredError):** Not applicable -- no negative API error tests
+- **Entry #6 (Reset on paused VMI):** Not applicable -- no VMI reset operations
+- **Entry #7 (SSH timeout after hard reset):** Not applicable -- uses `running_vm()` after restore (normal start, not cold boot)
+
+No modifications were needed. The generated code already correctly applies all relevant GRAVEYARD lessons from Phase 2 exploration.
+
+**Stopping here as instructed.** No further phases will be executed.
+Phase 5 is complete. Here is the summary:
+
+---
+
+**Phase 5: Pyright Validation - Complete**
+
+```
+Iterations:     1
+Errors Found:   0
+Fixes Applied:  0
+Result:         CLEAN
+```
+
+Both files passed pyright with zero errors, zero warnings, zero informations on the first run:
+
+| File | Errors | Warnings | Status |
+|------|--------|----------|--------|
+| `tests/storage/snapshots/test_storageprofile_snapshot_class.py` | 0 | 0 | CLEAN |
+| `tests/storage/snapshots/conftest.py` | 0 | 0 | CLEAN |
+
+No healing iterations were needed. The code generated in Phase 3 was already type-safe.
+
+**Stopping here as instructed.** No further phases will be executed.
+The background task notification confirms what we already saw -- the test run completed successfully with exit code 0. All 3 tests passed. The full results were already captured and reported in the Phase 6 summary above. No further action needed.

@@ -1,0 +1,698 @@
+diff --git a/GRAVEYARD.md b/GRAVEYARD.md
+new file mode 100644
+index 0000000..bb0e416
+--- /dev/null
++++ b/GRAVEYARD.md
+@@ -0,0 +1,130 @@
++# GRAVEYARD - Test Generation Lessons Learned
++
++This file documents mistakes made during automated test generation and how to avoid them.
++It is read during the exploration phase to prevent repeating past errors.
++
++---
++
++## Entry: Wrong HCO CR field name casing and value type for CommonInstancetypesDeployment
++
++**Category**: ResourceError
++**Date**: 2026-02-21
++**Test**: tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py::disabled_common_instancetypes_deployment
++
++### What Went Wrong
++The generated code used `commonInstancetypesDeployment` (lowercase 'c') as the HCO CR spec field name with string values `"Enabled"` / `"Disabled"`. The actual CRD field is `CommonInstancetypesDeployment` (capital 'C') and its value is an object with a nested boolean `enabled` field, not a string.
++
++### Wrong Code
++```python
++COMMON_INSTANCETYPES_DEPLOYMENT_KEY = "commonInstancetypesDeployment"
++COMMON_INSTANCETYPES_DEPLOYMENT_ENABLED = "Enabled"
++COMMON_INSTANCETYPES_DEPLOYMENT_DISABLED = "Disabled"
++
++# Used in fixtures as:
++patches={
++    hyperconverged_resource: {
++        "spec": {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: COMMON_INSTANCETYPES_DEPLOYMENT_DISABLED}
++    }
++}
++```
++
++### Correct Code
++```python
++COMMON_INSTANCETYPES_DEPLOYMENT_KEY = "CommonInstancetypesDeployment"
++COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_ENABLED = {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: {"enabled": True}}
++COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_DISABLED = {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: {"enabled": False}}
++
++# Used in fixtures as:
++patches={
++    hyperconverged_resource: {
++        "spec": COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_DISABLED
++    }
++}
++```
++
++### Lesson Learned
++HCO CRD field names do not always follow standard camelCase conventions. Some fields like `CommonInstancetypesDeployment` start with a capital letter. Additionally, the field type may be an object with nested properties rather than a simple string enum. Always verify the actual CRD schema before generating code.
++
++### How to Avoid
++Before generating code that patches HCO CR spec fields, run `kubectl get crd hyperconvergeds.hco.kubevirt.io -o json` and inspect the `openAPIV3Schema` to confirm: (1) the exact field name casing, (2) the field type (string, boolean, object), and (3) nested property structure. Never assume field names follow standard camelCase or that toggle fields use string enum values.
++
++---
++
++## Entry: Wrong type hints on helper function parameters
++
++**Category**: TypeError
++**Date**: 2026-02-21
++**Test**: tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py::get_common_cluster_instancetypes
++
++### What Went Wrong
++Helper functions that accept a Kubernetes `DynamicClient` parameter were annotated with incorrect types. The `admin_client` parameter was typed as `list[VirtualMachineClusterInstancetype]` (the return type was accidentally used as the parameter type) and `object` instead of `DynamicClient`.
++
++### Wrong Code
++```python
++def get_common_cluster_instancetypes(admin_client: list[VirtualMachineClusterInstancetype]) -> list[VirtualMachineClusterInstancetype]:
++    ...
++
++def wait_for_common_instancetypes_absent(admin_client: object, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    ...
++```
++
++### Correct Code
++```python
++from kubernetes.dynamic import DynamicClient
++
++def get_common_cluster_instancetypes(admin_client: DynamicClient) -> list[VirtualMachineClusterInstancetype]:
++    ...
++
++def wait_for_common_instancetypes_absent(admin_client: DynamicClient, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    ...
++```
++
++### Lesson Learned
++When writing type hints for Kubernetes client parameters, always use `DynamicClient` from `kubernetes.dynamic`. Do not confuse return types with parameter types, and do not use `object` as a generic stand-in.
++
++### How to Avoid
++For any function that takes a Kubernetes client parameter, always import and use `from kubernetes.dynamic import DynamicClient` as the type hint. Follow the pattern established in existing repository fixtures where `admin_client` is consistently typed as `DynamicClient`.
++
++---
++
++## Entry: Class-scoped fixtures from different VMs in same test class cause scheduling failures
++
++**Category**: ResourceError
++**Date**: 2026-02-21
++**Test**: tests/virt/screenshot/test_vm_screenshot.py::TestVMScreenshotGuestCompatibility::test_screenshot_with_rhel_guest
++
++### What Went Wrong
++Two class-scoped VM fixtures (`screenshot_fedora_vm` and `screenshot_rhel_vm`) were used by different tests within the same test class `TestVMScreenshotGuestCompatibility`. Because both fixtures were class-scoped, the Fedora VM remained alive for the entire class lifetime. When the RHEL test ran (still in the same class), the RHEL VM could not be scheduled because the cluster lacked sufficient memory to run both VMs simultaneously. The RHEL VM timed out with `ErrorUnschedulable: Insufficient memory`.
++
++### Wrong Code
++```python
++@pytest.mark.tier3
++class TestVMScreenshotGuestCompatibility:
++    def test_screenshot_with_fedora_guest(self, screenshot_fedora_vm, tmp_path):
++        ...
++
++    def test_screenshot_with_rhel_guest(self, screenshot_rhel_vm, tmp_path):
++        ...
++```
++
++### Correct Code
++```python
++@pytest.mark.tier3
++class TestVMScreenshotFedoraGuest:
++    def test_screenshot_with_fedora_guest(self, screenshot_fedora_vm, tmp_path):
++        ...
++
++
++@pytest.mark.tier3
++class TestVMScreenshotRhelGuest:
++    def test_screenshot_with_rhel_guest(self, screenshot_rhel_vm, tmp_path):
++        ...
++```
++
++### Lesson Learned
++When tests use different class-scoped VM fixtures, all fixtures remain alive for the entire class duration. On resource-constrained clusters, this means multiple VMs run simultaneously and can exceed available node memory. Each VM fixture that provisions a distinct VM should be in its own test class to ensure sequential teardown-then-create behavior.
++
++### How to Avoid
++Never put tests that use different class-scoped VM fixtures into the same test class. Each distinct VM fixture should be consumed by its own class so that one VM is torn down before the next is created. This prevents cluster scheduling failures due to insufficient resources.
++
++---
+diff --git a/tests/std/vnc_screenshot_stability/std_cnv_61271.md b/tests/std/vnc_screenshot_stability/std_cnv_61271.md
+new file mode 100644
+index 0000000..fdb5262
+--- /dev/null
++++ b/tests/std/vnc_screenshot_stability/std_cnv_61271.md
+@@ -0,0 +1,210 @@
++# Software Test Description (STD)
++
++## Feature: VNC Console Disconnect Due to Thumbnail/Full Screen Competition
++
++**STP Reference:** [stps/2.md](/home/fedora/thesis/stps/2.md)
++**Jira ID:** [CNV-61271](https://issues.redhat.com/browse/CNV-61271) / [CNV-60117](https://issues.redhat.com/browse/CNV-60117)
++**Generated:** 2026-02-21
++
++---
++
++## Summary
++
++Tests for the libvirt-based VM screenshot mechanism introduced in [kubevirt/kubevirt#15238](https://github.com/kubevirt/kubevirt/pull/15238). The fix replaces the VNC-based screenshot backend with libvirt's `virDomainScreenshot` API, eliminating the connection competition that caused VNC console disconnections when the VM overview thumbnail and full-screen VNC were used simultaneously.
++
++The tests verify:
++- Screenshot API returns valid image data without requiring a VNC connection
++- Active VNC connections remain stable when screenshots are taken concurrently
++- Multiple rapid screenshot requests do not degrade VNC stability
++- Screenshot functionality works across different guest operating systems
++
++---
++
++## Test Files
++
++### File: `tests/virt/screenshot/test_vm_screenshot.py`
++
++```python
++"""
++VM Screenshot (libvirt virDomainScreenshot) Tests
++
++STP Reference: https://issues.redhat.com/browse/CNV-61271
++
++This module contains tests verifying that the VM screenshot API uses
++libvirt's virDomainScreenshot instead of VNC, ensuring screenshots
++do not disrupt active VNC connections.
++
++PR: https://github.com/kubevirt/kubevirt/pull/15238
++"""
++
++import pytest
++
++
++class TestVMScreenshotAPI:
++    """
++    Tests for the VM screenshot API backed by libvirt virDomainScreenshot.
++
++    Preconditions:
++        - Running Fedora VM with VNC graphics device
++        - VM is SSH accessible
++    """
++
++    def test_screenshot_returns_valid_image(self):
++        """
++        Test that the screenshot API returns a valid, non-empty image file.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        pass
++
++    def test_screenshot_without_active_vnc_connection(self):
++        """
++        Test that a screenshot can be taken without any active VNC connection.
++
++        Preconditions:
++            - No VNC clients connected to the VM
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++
++        Expected:
++            - Screenshot is returned successfully
++        """
++        pass
++
++    def test_screenshot_image_is_valid_png(self):
++        """
++        Test that the screenshot image is a valid PNG file.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++            2. Read the PNG file header bytes
++
++        Expected:
++            - File starts with PNG magic bytes (89 50 4E 47)
++        """
++        pass
++
++
++class TestVNCStabilityDuringScreenshot:
++    """
++    Tests verifying VNC connection stability when screenshots are taken concurrently.
++
++    Preconditions:
++        - Running Fedora VM with VNC graphics device
++        - VM is SSH accessible
++    """
++
++    def test_vnc_connection_stable_during_screenshot(self):
++        """
++        Test that an active VNC connection remains stable when a screenshot is taken.
++
++        Steps:
++            1. Establish a VNC connection to the VM
++            2. Take a screenshot via virtctl vnc screenshot while VNC is connected
++            3. Verify the VNC connection is still active
++
++        Expected:
++            - VNC connection remains open and functional after screenshot
++        """
++        pass
++
++    def test_vnc_stable_after_multiple_consecutive_screenshots(self):
++        """
++        Test that an active VNC connection remains stable after multiple rapid screenshots.
++
++        Steps:
++            1. Establish a VNC connection to the VM
++            2. Take 5 consecutive screenshots via virtctl vnc screenshot
++            3. Verify the VNC connection is still active
++
++        Expected:
++            - VNC connection remains open and functional after all screenshots
++        """
++        pass
++
++    def test_screenshot_succeeds_with_active_vnc(self):
++        """
++        Test that screenshots return valid data while a VNC connection is active.
++
++        Steps:
++            1. Establish a VNC connection to the VM
++            2. Take a screenshot via virtctl vnc screenshot
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        pass
++
++
++class TestVMScreenshotGuestCompatibility:
++    """
++    Tests for screenshot functionality across different guest operating systems.
++
++    Markers:
++        - tier3
++
++    Parametrize:
++        - vm_os: [fedora, rhel]
++
++    Preconditions:
++        - Running VM with the parametrized guest OS
++        - VM has VNC graphics device configured
++        - VM is SSH accessible
++    """
++
++    def test_screenshot_with_guest_os(self):
++        """
++        Test that the screenshot API works with the given guest operating system.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        pass
++```
++
++---
++
++## Test Coverage Summary
++
++| Test File | Test Class | Test Count | Priority | Tier |
++| --- | --- | --- | --- | --- |
++| `test_vm_screenshot.py` | `TestVMScreenshotAPI` | 3 | P0 | Tier 1 |
++| `test_vm_screenshot.py` | `TestVNCStabilityDuringScreenshot` | 3 | P0 | Tier 1 |
++| `test_vm_screenshot.py` | `TestVMScreenshotGuestCompatibility` | 1 (parametrized) | P2 | Tier 3 |
++
++---
++
++## Traceability to STP Scenarios
++
++| STP Scenario | STD Test(s) | Coverage |
++| --- | --- | --- |
++| Scenario 1: VNC Stability with Concurrent Thumbnail | `test_vnc_connection_stable_during_screenshot` | VNC stays connected when screenshot (thumbnail backend) is called |
++| Scenario 2: Screenshot API Without VNC Connection | `test_screenshot_without_active_vnc_connection` | Screenshot works with no VNC clients connected |
++| Scenario 3: Screenshot Quality Verification | `test_screenshot_returns_valid_image`, `test_screenshot_image_is_valid_png` | Screenshot is non-empty and valid PNG |
++| Scenario 4: Thumbnail Updates Without VNC Impact | `test_vnc_stable_after_multiple_consecutive_screenshots`, `test_screenshot_succeeds_with_active_vnc` | Multiple screenshots don't disrupt VNC |
++| Scenario 5: Extended Dual-Tab Usage | Covered by Scenario 4 tests (rapid consecutive screenshots) | Repeated screenshot calls with active VNC |
++| Scenario 6: Multiple Guest OS Types | `test_screenshot_with_guest_os` (parametrized) | Fedora and RHEL guest OS coverage |
++
++---
++
++## Checklist
++
++- [x] STP link in module docstring
++- [x] Tests grouped in classes with shared preconditions
++- [x] Each test has: description, Steps, Expected
++- [x] Each test verifies ONE thing with ONE Expected
++- [x] Test methods contain only `pass`
++- [x] Appropriate pytest markers documented
++- [x] Parametrization documented where needed
++- [x] All files in single markdown output
++- [x] Coverage summary table included
++- [x] Output saved to `tests/std/vnc_screenshot_stability/std_cnv_61271.md`
++- [x] All STP scenarios covered
+diff --git a/tests/virt/screenshot/__init__.py b/tests/virt/screenshot/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/virt/screenshot/conftest.py b/tests/virt/screenshot/conftest.py
+new file mode 100644
+index 0000000..6020d67
+--- /dev/null
++++ b/tests/virt/screenshot/conftest.py
+@@ -0,0 +1,58 @@
++import logging
++
++import pytest
++from ocp_resources.virtual_machine import VirtualMachine
++from ocp_resources.virtual_machine_cluster_instancetype import (
++    VirtualMachineClusterInstancetype,
++)
++from ocp_resources.virtual_machine_cluster_preference import (
++    VirtualMachineClusterPreference,
++)
++
++from utilities.constants import (
++    OS_FLAVOR_RHEL,
++    RHEL10_PREFERENCE,
++    U1_SMALL,
++    Images,
++)
++from utilities.virt import VirtualMachineForTests, fedora_vm_body, wait_for_running_vm
++
++LOGGER = logging.getLogger(__name__)
++
++
++@pytest.fixture(scope="class")
++def screenshot_fedora_vm(unprivileged_client, namespace):
++    """Running Fedora VM using container disk for screenshot tests."""
++    name = "fedora-vm-screenshot"
++    with VirtualMachineForTests(
++        name=name,
++        namespace=namespace.name,
++        client=unprivileged_client,
++        body=fedora_vm_body(name=name),
++        run_strategy=VirtualMachine.RunStrategy.ALWAYS,
++    ) as vm:
++        wait_for_running_vm(vm=vm, check_ssh_connectivity=False)
++        yield vm
++
++
++@pytest.fixture(scope="class")
++def screenshot_rhel_vm(unprivileged_client, namespace):
++    """Running RHEL VM using instance type and preference for screenshot tests."""
++    with VirtualMachineForTests(
++        name="rhel-vm-screenshot",
++        image=Images.Rhel.RHEL10_REGISTRY_GUEST_IMG,
++        namespace=namespace.name,
++        client=unprivileged_client,
++        vm_instance_type=VirtualMachineClusterInstancetype(
++            name=U1_SMALL,
++            client=unprivileged_client,
++        ),
++        vm_preference=VirtualMachineClusterPreference(
++            name=RHEL10_PREFERENCE,
++            client=unprivileged_client,
++        ),
++        os_flavor=OS_FLAVOR_RHEL,
++        run_strategy=VirtualMachine.RunStrategy.ALWAYS,
++    ) as vm:
++        wait_for_running_vm(vm=vm, check_ssh_connectivity=False)
++        yield vm
+diff --git a/tests/virt/screenshot/test_vm_screenshot.py b/tests/virt/screenshot/test_vm_screenshot.py
+new file mode 100644
+index 0000000..ec78cb2
+--- /dev/null
++++ b/tests/virt/screenshot/test_vm_screenshot.py
+@@ -0,0 +1,273 @@
++"""
++VM Screenshot (libvirt virDomainScreenshot) Tests
++
++STP Reference: https://issues.redhat.com/browse/CNV-61271
++
++This module contains tests verifying that the VM screenshot API uses
++libvirt's virDomainScreenshot instead of VNC, ensuring screenshots
++do not disrupt active VNC connections.
++
++PR: https://github.com/kubevirt/kubevirt/pull/15238
++"""
++
++import logging
++import os
++import shlex
++
++import pytest
++
++from utilities.infra import run_virtctl_command
++from utilities.vnc_utils import VNCConnection
++
++LOGGER = logging.getLogger(__name__)
++
++PNG_MAGIC_BYTES = b"\x89PNG"
++SCREENSHOT_CONSECUTIVE_COUNT = 5
++
++
++def take_vm_screenshot(vm_name: str, vm_namespace: str, output_path: str) -> None:
++    """Take a VM screenshot via virtctl and assert the command succeeds.
++
++    Args:
++        vm_name: Name of the virtual machine.
++        vm_namespace: Namespace of the virtual machine.
++        output_path: File path to write the screenshot PNG to.
++    """
++    result, output, err = run_virtctl_command(
++        command=shlex.split(f"vnc screenshot {vm_name} -f {output_path}"),
++        namespace=vm_namespace,
++    )
++    assert result, f"virtctl vnc screenshot failed: {err}"
++    LOGGER.info(f"Screenshot saved to {output_path}")
++
++
++@pytest.mark.virt
++@pytest.mark.usefixtures("screenshot_fedora_vm")
++class TestVMScreenshotAPI:
++    """
++    Tests for the VM screenshot API backed by libvirt virDomainScreenshot.
++
++    Preconditions:
++        - Running Fedora VM with VNC graphics device
++    """
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_screenshot_returns_valid_image(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that the screenshot API returns a valid, non-empty image file.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        screenshot_path = str(tmp_path / "screenshot.png")
++        take_vm_screenshot(
++            vm_name=screenshot_fedora_vm.name,
++            vm_namespace=screenshot_fedora_vm.namespace,
++            output_path=screenshot_path,
++        )
++        file_size = os.path.getsize(screenshot_path)
++        LOGGER.info(f"Screenshot file size: {file_size} bytes")
++        assert file_size > 0, "Screenshot file is empty"
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_screenshot_without_active_vnc_connection(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that a screenshot can be taken without any active VNC connection.
++
++        Preconditions:
++            - No VNC clients connected to the VM
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++
++        Expected:
++            - Screenshot is returned successfully
++        """
++        screenshot_path = str(tmp_path / "screenshot_no_vnc.png")
++        take_vm_screenshot(
++            vm_name=screenshot_fedora_vm.name,
++            vm_namespace=screenshot_fedora_vm.namespace,
++            output_path=screenshot_path,
++        )
++        assert os.path.exists(screenshot_path), "Screenshot file was not created"
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_screenshot_image_is_valid_png(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that the screenshot image is a valid PNG file.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running VM
++            2. Read the PNG file header bytes
++
++        Expected:
++            - File starts with PNG magic bytes (89 50 4E 47)
++        """
++        screenshot_path = str(tmp_path / "screenshot_png_check.png")
++        take_vm_screenshot(
++            vm_name=screenshot_fedora_vm.name,
++            vm_namespace=screenshot_fedora_vm.namespace,
++            output_path=screenshot_path,
++        )
++        with open(screenshot_path, "rb") as screenshot_file:
++            header = screenshot_file.read(4)
++        LOGGER.info(f"Screenshot header bytes: {header.hex()}")
++        assert header == PNG_MAGIC_BYTES, (
++            f"Screenshot is not a valid PNG file. Header: {header.hex()}, expected: {PNG_MAGIC_BYTES.hex()}"
++        )
++
++
++@pytest.mark.virt
++@pytest.mark.usefixtures("screenshot_fedora_vm")
++class TestVNCStabilityDuringScreenshot:
++    """
++    Tests verifying VNC connection stability when screenshots are taken concurrently.
++
++    Preconditions:
++        - Running Fedora VM with VNC graphics device
++    """
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_vnc_connection_stable_during_screenshot(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that an active VNC connection remains stable when a screenshot is taken.
++
++        Steps:
++            1. Establish a VNC connection to the VM
++            2. Take a screenshot via virtctl vnc screenshot while VNC is connected
++            3. Verify the VNC connection is still active
++
++        Expected:
++            - VNC connection remains open and functional after screenshot
++        """
++        with VNCConnection(vm=screenshot_fedora_vm) as vnc_child:
++            assert vnc_child is not None, "VNC connection was not established"
++            LOGGER.info("VNC connection established, taking screenshot")
++            screenshot_path = str(tmp_path / "screenshot_vnc_stable.png")
++            take_vm_screenshot(
++                vm_name=screenshot_fedora_vm.name,
++                vm_namespace=screenshot_fedora_vm.namespace,
++                output_path=screenshot_path,
++            )
++            assert vnc_child.isalive(), "VNC connection was disrupted after screenshot"
++            LOGGER.info("VNC connection remains stable after screenshot")
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_vnc_stable_after_multiple_consecutive_screenshots(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that an active VNC connection remains stable after multiple rapid screenshots.
++
++        Steps:
++            1. Establish a VNC connection to the VM
++            2. Take 5 consecutive screenshots via virtctl vnc screenshot
++            3. Verify the VNC connection is still active
++
++        Expected:
++            - VNC connection remains open and functional after all screenshots
++        """
++        with VNCConnection(vm=screenshot_fedora_vm) as vnc_child:
++            assert vnc_child is not None, "VNC connection was not established"
++            LOGGER.info("VNC connection established, taking multiple screenshots")
++            for screenshot_index in range(SCREENSHOT_CONSECUTIVE_COUNT):
++                screenshot_path = str(tmp_path / f"screenshot_{screenshot_index}.png")
++                take_vm_screenshot(
++                    vm_name=screenshot_fedora_vm.name,
++                    vm_namespace=screenshot_fedora_vm.namespace,
++                    output_path=screenshot_path,
++                )
++                LOGGER.info(f"Screenshot {screenshot_index + 1}/{SCREENSHOT_CONSECUTIVE_COUNT} completed")
++            assert vnc_child.isalive(), (
++                "VNC connection was disrupted after multiple consecutive screenshots"
++            )
++            LOGGER.info("VNC connection remains stable after all screenshots")
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_screenshot_succeeds_with_active_vnc(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that screenshots return valid data while a VNC connection is active.
++
++        Steps:
++            1. Establish a VNC connection to the VM
++            2. Take a screenshot via virtctl vnc screenshot
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        with VNCConnection(vm=screenshot_fedora_vm):
++            LOGGER.info("VNC connection established, verifying screenshot content")
++            screenshot_path = str(tmp_path / "screenshot_with_vnc.png")
++            take_vm_screenshot(
++                vm_name=screenshot_fedora_vm.name,
++                vm_namespace=screenshot_fedora_vm.namespace,
++                output_path=screenshot_path,
++            )
++            file_size = os.path.getsize(screenshot_path)
++            LOGGER.info(f"Screenshot file size with active VNC: {file_size} bytes")
++            assert file_size > 0, "Screenshot file is empty while VNC is active"
++
++
++@pytest.mark.virt
++@pytest.mark.tier3
++class TestVMScreenshotFedoraGuest:
++    """
++    Tests for screenshot functionality with Fedora guest OS.
++
++    Preconditions:
++        - Running Fedora VM with VNC graphics device configured
++    """
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_screenshot_with_fedora_guest(self, screenshot_fedora_vm, tmp_path):
++        """
++        Test that the screenshot API works with a Fedora guest operating system.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running Fedora VM
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        screenshot_path = str(tmp_path / "screenshot_fedora.png")
++        take_vm_screenshot(
++            vm_name=screenshot_fedora_vm.name,
++            vm_namespace=screenshot_fedora_vm.namespace,
++            output_path=screenshot_path,
++        )
++        file_size = os.path.getsize(screenshot_path)
++        LOGGER.info(f"Fedora screenshot file size: {file_size} bytes")
++        assert file_size > 0, "Fedora screenshot file is empty"
++
++
++@pytest.mark.virt
++@pytest.mark.tier3
++class TestVMScreenshotRhelGuest:
++    """
++    Tests for screenshot functionality with RHEL guest OS.
++
++    Preconditions:
++        - Running RHEL VM with VNC graphics device configured
++    """
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_screenshot_with_rhel_guest(self, screenshot_rhel_vm, tmp_path):
++        """
++        Test that the screenshot API works with a RHEL guest operating system.
++
++        Steps:
++            1. Call virtctl vnc screenshot for the running RHEL VM
++
++        Expected:
++            - Screenshot file exists and has non-zero size
++        """
++        screenshot_path = str(tmp_path / "screenshot_rhel.png")
++        take_vm_screenshot(
++            vm_name=screenshot_rhel_vm.name,
++            vm_namespace=screenshot_rhel_vm.namespace,
++            output_path=screenshot_path,
++        )
++        file_size = os.path.getsize(screenshot_path)
++        LOGGER.info(f"RHEL screenshot file size: {file_size} bytes")
++        assert file_size > 0, "RHEL screenshot file is empty"

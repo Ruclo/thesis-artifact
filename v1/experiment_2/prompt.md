@@ -1,0 +1,265 @@
+Act as a Senior SDET. I need you to implement the test plan below.
+
+I am currently in the root of the repository. Before generating any code, you must perform a "Context Exploration" phase to understand the existing testing architecture.
+
+**Step 1: Context Exploration**
+1.  Scan the `docs/` folder to understand the project's testing conventions or architecture documentation.
+2.  Analyze the `libs/` and `utilities/` folders. Identify existing helper classes, fixtures, and utility functions.
+3.  Look for existing test files in `tests/` folder to see how they import these utilities and what standard `pytest` fixtures are available (e.g., clients, namespace helpers). Examine how tests are linked to requirements.
+
+**Step 2: Code Generation**
+* Implement the scenarios from the Test Plan below.
+* **Strict Constraint:** Do not hallucinate new utilities. You MUST use the existing functions and classes you found in `libs/` and `utilities/`. If a specific helper is missing, implement it locally in the test file using the base clients found.
+
+**Test Plan (STP):**
+# Openshift-virtualization-tests Test plan
+
+## **VNC Console Disconnect Due to Thumbnail/Full Screen Competition - Quality Engineering Plan**
+
+---
+
+### Metadata & Tracking
+
+| Field                  | Details                                                                |
+| :--------------------- | :--------------------------------------------------------------------- |
+| **Enhancement(s)**     | N/A - Bug Fix                                                          |
+| **Feature in Jira**    | [CNV-61271](https://issues.redhat.com/browse/CNV-61271)                |
+| **Jira Tracking**      | [CNV-60117](https://issues.redhat.com/browse/CNV-60117) (Bug Fix)      |
+| **QE Owner(s)**        | Matan Schatzman                                                        |
+| **Owning SIG**         | sig-compute                                                            |
+| **Participating SIGs** | sig-compute, sig-ui                                                    |
+| **Current Status**     | Draft                                                                  |
+
+### Related GitHub Pull Requests
+
+| PR Link | Repository | Source Jira Issue | Description |
+| :------ | :--------- | :---------------- | :---------- |
+| [kubevirt/kubevirt#15238](https://github.com/kubevirt/kubevirt/pull/15238) | kubevirt/kubevirt | CNV-60117 | Screenshot without VNC - use libvirt virDomainScreenshot instead of VNC |
+
+**Note:** All PRs listed above were reviewed for implementation details, code changes, and review comments to inform this test plan.
+
+---
+
+### **I. Motivation and Requirements Review (QE Review Guidelines)**
+
+#### **1. Requirement & User Story Review Checklist**
+
+| Check                                  | Done | Details/Notes                                                                                                                                                                           | Comments |
+| :------------------------------------- | :--- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| **Review Requirements**                | [x]  | Reviewed bug: VNC console disconnects when VM overview thumbnail and full-screen VNC compete for the VNC connection. Impacting OpenShift Virt Roadshow. |          |
+| **Understand Value**                   | [x]  | Critical for user experience - VNC console unusable due to constant disconnections. |          |
+| **Customer Use Cases**                 | [x]  | Users viewing VM overview (thumbnail) while also having full-screen VNC open in another tab. |          |
+| **Testability**                        | [x]  | Testable by opening both thumbnail and full-screen VNC simultaneously. |          |
+| **Acceptance Criteria**                | [x]  | VNC connection should remain stable when both thumbnail and full-screen view are active. |          |
+| **Non-Functional Requirements (NFRs)** | [x]  | Usability - stable console experience; Performance - no degradation. |          |
+
+#### **2. Technology and Design Review**
+
+| Check                            | Done | Details/Notes                                                                                                                           | Comments |
+| :------------------------------- | :--- | :------------------------------------------------------------------------------------------------------------------------------------------------------ | :------- |
+| **Developer Handoff/QE Kickoff** | [ ]  | Pending - need walkthrough on new screenshot implementation. |          |
+| **Technology Challenges**        | [x]  | Fix changes screenshot to use libvirt's virDomainScreenshot API instead of VNC, eliminating connection competition. |          |
+| **Test Environment Needs**       | [x]  | Standard cluster with UI access. |          |
+| **API Extensions**               | [x]  | vnc/screenshot endpoint backend changed from VNC to libvirt API. |          |
+| **Topology Considerations**      | [x]  | Standard topology, no special requirements. |          |
+
+### **II. Software Test Plan (STP)**
+
+#### **1. Scope of Testing**
+
+**In Scope:**
+
+- Verify VNC console remains connected when thumbnail is active
+- Verify thumbnail screenshot updates without disconnecting VNC
+- Verify screenshot API works without VNC connection
+- Verify screenshot quality is acceptable
+- Verify screenshot functionality across different guest OS types
+
+**Document Conventions:** 
+- VNC: Virtual Network Computing - remote display protocol
+- Thumbnail: Small VM screen preview in VM overview page
+- Screenshot: Static image capture of VM display
+- virDomainScreenshot: libvirt API for capturing VM screen
+
+#### **2. Testing Goals**
+
+- [ ] Verify 0 VNC disconnections when thumbnail is displayed
+- [ ] Confirm screenshot API works independently of VNC
+- [ ] Validate user experience in dual-tab scenario (overview + full-screen)
+
+#### **3. Non-Goals (Testing Scope Exclusions)**
+
+| Non-Goal                               | Rationale              | PM/ Lead Agreement |
+| :------------------------------------- | :--------------------- | :----------------- |
+| VNC console feature testing            | Covered by existing tests | [ ] Name/Date      |
+| Console performance benchmarking       | Functionality focus | [ ] Name/Date      |
+| Serial console testing                 | Different feature | [ ] Name/Date      |
+
+#### **4. Test Strategy**
+
+##### **A. Types of Testing**
+
+| Item (Testing Type)            | Applicable (Y/N or N/A) | Comments |
+| :----------------------------- | :---------------------- | :------- |
+| Functional Testing             | Y                       | Core screenshot functionality |
+| Automation Testing             | Y                       | Must be automated |
+| Performance Testing            | N/A                     | Not primary focus |
+| Security Testing               | N/A                     | No security changes |
+| Usability Testing              | Y                       | User experience focus |
+| Compatibility Testing          | Y                       | Different guest OS |
+| Regression Testing             | Y                       | VNC functionality |
+| Upgrade Testing                | N/A                     | Not upgrade specific |
+| Backward Compatibility Testing | Y                       | API compatibility |
+
+##### **B. Potential Areas to Consider**
+
+| Item                   | Description                                                                                                        | Applicable (Y/N or N/A) | Comment |
+| :--------------------- | :----------------------------------------------------------------------------------------------------------------- | :---------------------- | :------ |
+| **Dependencies**       | libvirt virDomainScreenshot API                                                                                    | Y                       | New backend |
+| **Monitoring**         | VNC connection stability monitoring                                                                                | Y                       | Key metric |
+| **Cross Integrations** | virt-launcher, virt-handler, API server, UI                                                                        | Y                       | All affected |
+| **UI**                 | Thumbnail display, VNC console                                                                                     | Y                       | Primary user interaction |
+
+#### **5. Test Environment**
+
+| Environment Component                         | Configuration | Specification Examples                                                                        |
+| :-------------------------------------------- | :------------ | :-------------------------------------------------------------------------------------------- |
+| **Cluster Topology**                          | Required      | Standard multi-node cluster                                                                   |
+| **OCP & OpenShift Virtualization Version(s)** | Required      | OCP 4.17+ with OpenShift Virtualization 4.17+                                                 |
+| **CPU Virtualization**                        | Required      | VT-x or AMD-V enabled                                                                         |
+| **Compute Resources**                         | Required      | Standard requirements                                                                         |
+| **Special Hardware**                          | N/A           | None required                                                                                 |
+| **Storage**                                   | Required      | Standard storage                                                                              |
+| **Network**                                   | Required      | OVN-Kubernetes                                                                                |
+| **Required Operators**                        | Required      | OpenShift Virtualization Operator                                                             |
+| **Platform**                                  | Required      | Any supported platform                                                                        |
+| **Special Configurations**                    | N/A           | None                                                                                          |
+
+#### **5.5. Testing Tools & Frameworks**
+
+| Category           | Tools/Frameworks                                                  |
+| :----------------- | :---------------------------------------------------------------- |
+| **Test Framework** | Standard OpenShift Virtualization test framework                  |
+| **CI/CD**          | Standard CI pipeline                                              |
+| **Other Tools**    | Browser automation for UI testing                                 |
+
+#### **6. Entry and Exit Criteria**
+
+##### **A. Entry Criteria**
+
+- [x] Requirements and design documents are **approved and merged**
+- [ ] Test environment is **set up and configured**
+- [ ] Test cases are **reviewed and approved**
+- [ ] PR #15238 is merged
+
+##### **B. Exit Criteria**
+
+- [ ] VNC console stable with concurrent thumbnail
+- [ ] Screenshot API functional without VNC
+- [ ] No regression in VNC functionality
+- [ ] Test automation merged
+
+#### **7. Risks and Limitations**
+
+| Risk Category        | Specific Risk for This Feature                                                                                 | Mitigation Strategy                                                                            | Status |
+| :------------------- | :------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- | :----- |
+| Timeline/Schedule    | UI testing may require manual verification                                                                     | Prioritize automation where possible                                                           | [ ]    |
+| Test Coverage        | Browser-specific behavior may vary                                                                             | Test on Chrome and Firefox                                                                     | [ ]    |
+| Test Environment     | Need UI access to cluster                                                                                      | Use cluster with console access                                                                | [ ]    |
+| Untestable Aspects   | Exact timing of VNC disconnect is variable                                                                     | Focus on outcome (stable connection)                                                           | [ ]    |
+| Resource Constraints | UI testing resources                                                                                           | Schedule UI tests appropriately                                                                | [ ]    |
+| Dependencies         | libvirt screenshot API availability                                                                            | Verify libvirt version supports feature                                                        | [ ]    |
+| Other                | N/A                                                                                                            | N/A                                                                                            | [ ]    |
+
+#### **8. Known Limitations**
+
+- Screenshot quality depends on libvirt implementation
+- Feature requires graphics device (VNC or SPICE) configured on VM
+- Screenshot may have slight delay compared to live VNC
+
+---
+
+### **III. Test Case Descriptions & Traceability**
+
+#### **1. Requirements-to-Tests Mapping**
+
+| Requirement ID | Requirement Summary   | Test Scenario(s)                                           | Test Type(s)                | Priority |
+| :------------- | :-------------------- | :--------------------------------------------------------- | :-------------------------- | :------- |
+| CNV-61271      | VNC stability | Open thumbnail and full-screen VNC, verify no disconnect | Functional, Tier 1 | P0 |
+| CNV-61271      | Screenshot without VNC | Call screenshot API without VNC connection | Functional, Tier 1 | P0 |
+| CNV-61271      | Screenshot quality | Verify screenshot image quality acceptable | Functional, Tier 1 | P1 |
+| CNV-61271      | Multi-guest support | Test with different guest OS (Fedora, RHEL, Windows) | Compatibility, Tier 2 | P2 |
+
+#### **Test Scenarios - Tier 1 (Functional)**
+
+**Scenario 1: VNC Stability with Concurrent Thumbnail**
+- **Preconditions:** VM running with VNC console available
+- **Steps:**
+  1. Open VM overview page (shows thumbnail)
+  2. Click "Open web console" to open full-screen VNC in new tab
+  3. Keep both tabs open side by side
+  4. Wait 5 minutes observing VNC connection
+- **Expected Result:** VNC remains connected, no disconnects
+- **Priority:** P0
+
+**Scenario 2: Screenshot API Without VNC Connection**
+- **Preconditions:** VM running, no VNC clients connected
+- **Steps:**
+  1. Call vnc/screenshot API endpoint
+  2. Verify screenshot returned successfully
+  3. Verify no VNC connection was established
+- **Expected Result:** Screenshot returned without VNC
+- **Priority:** P0
+
+**Scenario 3: Screenshot Quality Verification**
+- **Preconditions:** VM running with graphical display
+- **Steps:**
+  1. Display known content on VM screen (e.g., login prompt)
+  2. Call screenshot API
+  3. Verify screenshot shows expected content
+- **Expected Result:** Screenshot clearly shows VM display content
+- **Priority:** P1
+
+**Scenario 4: Thumbnail Updates Without VNC Impact**
+- **Preconditions:** Full-screen VNC active
+- **Steps:**
+  1. Open full-screen VNC connection
+  2. In another tab, navigate to VM overview (triggers thumbnail)
+  3. Refresh overview multiple times
+  4. Monitor VNC connection
+- **Expected Result:** VNC connection unaffected by thumbnail refreshes
+- **Priority:** P0
+
+#### **Test Scenarios - Tier 2 (E2E)**
+
+**Scenario 5: Extended Dual-Tab Usage**
+- **Preconditions:** VM running
+- **Steps:**
+  1. Open VM overview and full-screen VNC simultaneously
+  2. Interact with VM via full-screen VNC
+  3. Periodically refresh overview page
+  4. Continue for 30 minutes
+- **Expected Result:** Continuous VNC connectivity throughout
+- **Priority:** P1
+
+**Scenario 6: Multiple Guest OS Types**
+- **Preconditions:** VMs with different guest OS
+- **Steps:**
+  1. Test Fedora VM - thumbnail + VNC
+  2. Test RHEL VM - thumbnail + VNC
+  3. Test Windows VM - thumbnail + VNC
+- **Expected Result:** All guest types work correctly
+- **Priority:** P2
+
+---
+
+### **IV. Sign-off and Approval**
+
+This Software Test Plan requires approval from the following stakeholders:
+
+- **Reviewers:**
+  - [QE Team Lead]
+  - [UI Team Representative]
+- **Approvers:**
+  - [QE Manager]
+  - [Product Owner]

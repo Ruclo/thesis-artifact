@@ -1,0 +1,656 @@
+diff --git a/tests/virt/node/vnc_console/README.md b/tests/virt/node/vnc_console/README.md
+new file mode 100644
+index 0000000..615726c
+--- /dev/null
++++ b/tests/virt/node/vnc_console/README.md
+@@ -0,0 +1,142 @@
++# VNC Console and Screenshot Stability Tests
++
++## Overview
++
++This test module implements the test plan for **CNV-61271: VNC Console Disconnect Due to Thumbnail/Full Screen Competition**.
++
++## Background
++
++### Problem
++Previously, when users viewed a VM overview page (showing a thumbnail screenshot) while also having a full-screen VNC console open in another tab, the VNC connection would constantly disconnect. This was caused by both the thumbnail and full-screen VNC competing for the same VNC connection.
++
++### Solution
++The fix (PR [kubevirt/kubevirt#15238](https://github.com/kubevirt/kubevirt/pull/15238)) changes the screenshot functionality to use libvirt's `virDomainScreenshot` API instead of VNC, eliminating the connection competition.
++
++## Test Coverage
++
++### Tier 1 Tests (Functional)
++
++#### TestVNCScreenshotStability
++
++1. **test_vnc_stability_with_concurrent_screenshot** (P0)
++   - Verifies VNC connection remains stable when screenshots are taken
++   - Polarion: CNV-61271
++   - Simulates the original bug scenario
++
++2. **test_screenshot_without_vnc_connection** (P0)
++   - Verifies screenshot API works without establishing VNC connection
++   - Polarion: CNV-61271
++   - Confirms screenshots use libvirt API, not VNC
++
++3. **test_screenshot_quality_verification** (P1)
++   - Verifies screenshot quality and format
++   - Polarion: CNV-61271
++   - Ensures screenshot functionality is usable
++
++4. **test_thumbnail_updates_without_vnc_impact** (P0)
++   - Verifies thumbnail refreshes don't impact active VNC
++   - Polarion: CNV-61271
++   - Core functionality test
++
++### Tier 2 Tests (E2E)
++
++#### TestVNCExtendedStability
++
++5. **test_extended_dual_usage** (P1)
++   - Tests extended dual-tab usage (5 minutes)
++   - Polarion: CNV-61271
++   - Verifies long-term stability
++
++#### TestMultiGuestOS
++
++6. **test_fedora_vm_screenshot_and_vnc** (P2)
++   - Tests Fedora guest OS compatibility
++   - Polarion: CNV-61271
++
++7. **test_rhel_vm_screenshot_and_vnc** (P2)
++   - Tests RHEL guest OS compatibility
++   - Polarion: CNV-61271
++
++8. **test_windows_vm_screenshot_and_vnc** (P2)
++   - Tests Windows guest OS compatibility
++   - Polarion: CNV-61271
++   - Marked with `@pytest.mark.high_resource_vm`
++
++## Test Structure
++
++```
++tests/virt/node/vnc_console/
++├── __init__.py
++├── README.md (this file)
++├── conftest.py (fixtures for test VMs)
++└── test_vnc_screenshot_stability.py (main test implementation)
++```
++
++## Fixtures
++
++All fixtures are defined in `conftest.py`:
++
++- `running_fedora_vm`: Fedora VM for testing
++- `running_rhel_vm`: RHEL VM for multi-OS testing
++- `running_windows_vm`: Windows VM for multi-OS testing
++
++## Running the Tests
++
++### Run all VNC console tests
++```bash
++pytest tests/virt/node/vnc_console/
++```
++
++### Run specific test classes
++```bash
++# Tier 1 tests only
++pytest tests/virt/node/vnc_console/ -m tier1
++
++# Tier 2 tests only
++pytest tests/virt/node/vnc_console/ -m tier2
++```
++
++### Run specific scenarios
++```bash
++# Scenario 1: VNC stability
++pytest tests/virt/node/vnc_console/test_vnc_screenshot_stability.py::TestVNCScreenshotStability::test_vnc_stability_with_concurrent_screenshot
++
++# Scenario 2: Screenshot without VNC
++pytest tests/virt/node/vnc_console/test_vnc_screenshot_stability.py::TestVNCScreenshotStability::test_screenshot_without_vnc_connection
++```
++
++### Run by Polarion ID
++```bash
++pytest tests/virt/node/vnc_console/ -m polarion=CNV-61271
++```
++
++## Requirements
++
++### Test Environment
++- Standard multi-node OpenShift cluster
++- OpenShift Virtualization 4.17+
++- VT-x or AMD-V enabled
++- Standard storage and network configuration
++
++### Entry Criteria
++- PR #15238 is merged
++- Test environment is set up and configured
++
++### Exit Criteria
++- VNC console stable with concurrent thumbnail
++- Screenshot API functional without VNC
++- No regression in VNC functionality
++- Test automation merged
++
++## Related Links
++
++- Jira Bug: [CNV-60117](https://issues.redhat.com/browse/CNV-60117)
++- Jira Enhancement: [CNV-61271](https://issues.redhat.com/browse/CNV-61271)
++- KubeVirt PR: [#15238](https://github.com/kubevirt/kubevirt/pull/15238)
++
++## Notes
++
++- Tests use the existing `VNCConnection` context manager from `utilities.vnc_utils`
++- Screenshot functionality uses `collect_vnc_screenshot_for_vms` from `utilities.data_collector`
++- Tests verify the fix by ensuring VNC connections remain stable when screenshots are taken
++- Windows tests are marked as `high_resource_vm` due to resource requirements
+diff --git a/tests/virt/node/vnc_console/__init__.py b/tests/virt/node/vnc_console/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/virt/node/vnc_console/conftest.py b/tests/virt/node/vnc_console/conftest.py
+new file mode 100644
+index 0000000..9b506ef
+--- /dev/null
++++ b/tests/virt/node/vnc_console/conftest.py
+@@ -0,0 +1,72 @@
++import logging
++
++import pytest
++from ocp_resources.virtual_machine import VirtualMachine
++from ocp_resources.virtual_machine_cluster_instancetype import (
++    VirtualMachineClusterInstancetype,
++)
++from ocp_resources.virtual_machine_cluster_preference import (
++    VirtualMachineClusterPreference,
++)
++
++from utilities.constants import OS_FLAVOR_FEDORA, OS_FLAVOR_RHEL, OS_FLAVOR_WINDOWS, RHEL10_PREFERENCE, U1_SMALL, Images
++from utilities.virt import VirtualMachineForTests, wait_for_running_vm
++
++LOGGER = logging.getLogger(__name__)
++
++
++@pytest.fixture(scope="class")
++def running_fedora_vm(unprivileged_client, namespace):
++    """
++    Create and start a Fedora VM for VNC console testing.
++    """
++    with VirtualMachineForTests(
++        name="fedora-vnc-test",
++        image=Images.Fedora.FEDORA_CONTAINER_IMAGE,
++        namespace=namespace.name,
++        client=unprivileged_client,
++        vm_instance_type=VirtualMachineClusterInstancetype(name=U1_SMALL, client=unprivileged_client),
++        vm_preference=VirtualMachineClusterPreference(name=OS_FLAVOR_FEDORA, client=unprivileged_client),
++        os_flavor=OS_FLAVOR_FEDORA,
++        run_strategy=VirtualMachine.RunStrategy.ALWAYS,
++    ) as vm:
++        wait_for_running_vm(vm=vm)
++        yield vm
++
++
++@pytest.fixture(scope="class")
++def running_rhel_vm(unprivileged_client, namespace):
++    """
++    Create and start a RHEL VM for multi-OS testing.
++    """
++    with VirtualMachineForTests(
++        name="rhel-vnc-test",
++        image=Images.Rhel.RHEL10_REGISTRY_GUEST_IMG,
++        namespace=namespace.name,
++        client=unprivileged_client,
++        vm_instance_type=VirtualMachineClusterInstancetype(name=U1_SMALL, client=unprivileged_client),
++        vm_preference=VirtualMachineClusterPreference(name=RHEL10_PREFERENCE, client=unprivileged_client),
++        os_flavor=OS_FLAVOR_RHEL,
++        run_strategy=VirtualMachine.RunStrategy.ALWAYS,
++    ) as vm:
++        wait_for_running_vm(vm=vm)
++        yield vm
++
++
++@pytest.fixture(scope="class")
++def running_windows_vm(unprivileged_client, namespace):
++    """
++    Create and start a Windows VM for multi-OS testing.
++    """
++    with VirtualMachineForTests(
++        name="windows-vnc-test",
++        image=Images.Windows.WIN2k19_IMG,
++        namespace=namespace.name,
++        client=unprivileged_client,
++        vm_instance_type=VirtualMachineClusterInstancetype(name=U1_SMALL, client=unprivileged_client),
++        vm_preference=VirtualMachineClusterPreference(name=OS_FLAVOR_WINDOWS, client=unprivileged_client),
++        os_flavor=OS_FLAVOR_WINDOWS,
++        run_strategy=VirtualMachine.RunStrategy.ALWAYS,
++    ) as vm:
++        wait_for_running_vm(vm=vm)
++        yield vm
+diff --git a/tests/virt/node/vnc_console/test_vnc_screenshot_stability.py b/tests/virt/node/vnc_console/test_vnc_screenshot_stability.py
+new file mode 100644
+index 0000000..41ec316
+--- /dev/null
++++ b/tests/virt/node/vnc_console/test_vnc_screenshot_stability.py
+@@ -0,0 +1,421 @@
++"""
++Test VNC Console and Screenshot Stability
++
++Tests for CNV-61271 - VNC Console Disconnect Due to Thumbnail/Full Screen Competition
++Related PR: https://github.com/kubevirt/kubevirt/pull/15238
++
++This module tests the fix that changes screenshot functionality to use
++libvirt's virDomainScreenshot API instead of VNC, eliminating connection
++competition between thumbnail and full-screen VNC.
++"""
++
++import logging
++import os
++import shlex
++import time
++from subprocess import run
++
++import pytest
++from timeout_sampler import TimeoutExpiredError, TimeoutSampler
++
++from utilities.constants import TIMEOUT_1MIN, TIMEOUT_5MIN, TIMEOUT_30MIN
++from utilities.data_collector import collect_vnc_screenshot_for_vms, get_data_collector_base_directory
++from utilities.infra import run_virtctl_command
++from utilities.vnc_utils import VNCConnection
++
++LOGGER = logging.getLogger(__name__)
++
++
++@pytest.mark.virt
++@pytest.mark.tier1
++@pytest.mark.polarion("CNV-61271")
++class TestVNCScreenshotStability:
++    """
++    Test VNC console stability when screenshot functionality is active.
++
++    These tests verify that the fix for CNV-60117 prevents VNC disconnections
++    when both thumbnail (screenshot) and full-screen VNC are active.
++    """
++
++    def test_vnc_stability_with_concurrent_screenshot(self, running_fedora_vm):
++        """
++        Test VNC connection remains stable when screenshots are taken.
++
++        Scenario 1: VNC Stability with Concurrent Thumbnail
++
++        Preconditions:
++            - VM running with VNC console available
++
++        Steps:
++            1. Open VNC connection to VM
++            2. Take multiple screenshots while VNC is connected
++            3. Wait and monitor VNC connection
++            4. Verify VNC remains connected throughout
++
++        Expected Result:
++            - VNC remains connected
++            - No disconnects occur
++            - Screenshots are successfully captured
++
++        Priority: P0
++        """
++        LOGGER.info(f"Testing VNC stability with concurrent screenshots for VM {running_fedora_vm.name}")
++
++        vnc_disconnected = False
++        screenshots_taken = 0
++        expected_screenshots = 5
++
++        with VNCConnection(vm=running_fedora_vm) as vnc_connection:
++            LOGGER.info("VNC connection established successfully")
++
++            for screenshot_count in range(expected_screenshots):
++                try:
++                    LOGGER.info(f"Taking screenshot {screenshot_count + 1}/{expected_screenshots}")
++                    collect_vnc_screenshot_for_vms(
++                        vm_name=running_fedora_vm.name,
++                        vm_namespace=running_fedora_vm.namespace,
++                    )
++                    screenshots_taken += 1
++
++                    if vnc_connection.child.isalive():
++                        LOGGER.info(f"VNC connection still alive after screenshot {screenshot_count + 1}")
++                    else:
++                        LOGGER.error(f"VNC connection died after screenshot {screenshot_count + 1}")
++                        vnc_disconnected = True
++                        break
++
++                    time.sleep(10)
++
++                except Exception as exc:
++                    LOGGER.error(f"Screenshot {screenshot_count + 1} failed: {exc}")
++
++            time.sleep(TIMEOUT_1MIN)
++
++            if vnc_connection.child.isalive():
++                LOGGER.info("VNC connection remained stable throughout test")
++            else:
++                LOGGER.error("VNC connection was lost during test")
++                vnc_disconnected = True
++
++        assert not vnc_disconnected, "VNC connection should remain stable when screenshots are taken"
++        assert screenshots_taken == expected_screenshots, (
++            f"Should have taken {expected_screenshots} screenshots, but only took {screenshots_taken}"
++        )
++
++    def test_screenshot_without_vnc_connection(self, running_fedora_vm):
++        """
++        Test screenshot API works without establishing VNC connection.
++
++        Scenario 2: Screenshot API Without VNC Connection
++
++        Preconditions:
++            - VM running
++            - No VNC clients connected
++
++        Steps:
++            1. Ensure no VNC connections are active
++            2. Call vnc/screenshot API endpoint
++            3. Verify screenshot returned successfully
++            4. Verify no VNC connection was established
++
++        Expected Result:
++            - Screenshot returned without VNC
++            - Screenshot file exists and is valid
++
++        Priority: P0
++        """
++        LOGGER.info(f"Testing screenshot without VNC connection for VM {running_fedora_vm.name}")
++
++        base_dir = get_data_collector_base_directory()
++        screenshot_file = f"{base_dir}/{running_fedora_vm.namespace}-{running_fedora_vm.name}-no-vnc.png"
++
++        try:
++            LOGGER.info("Taking screenshot without VNC connection")
++            run_virtctl_command(
++                command=shlex.split(f"vnc screenshot {running_fedora_vm.name} -f {screenshot_file}"),
++                namespace=running_fedora_vm.namespace,
++            )
++
++            assert os.path.exists(screenshot_file), f"Screenshot file should exist at {screenshot_file}"
++            assert os.path.getsize(screenshot_file) > 0, "Screenshot file should not be empty"
++
++            LOGGER.info(f"Screenshot successfully created at {screenshot_file}")
++
++        except Exception as exc:
++            pytest.fail(f"Screenshot failed without VNC connection: {exc}")
++
++    def test_screenshot_quality_verification(self, running_fedora_vm):
++        """
++        Test screenshot quality is acceptable.
++
++        Scenario 3: Screenshot Quality Verification
++
++        Preconditions:
++            - VM running with graphical display
++
++        Steps:
++            1. Take screenshot via API
++            2. Verify screenshot exists
++            3. Verify screenshot has valid format (PNG)
++            4. Verify screenshot has reasonable size
++
++        Expected Result:
++            - Screenshot clearly shows VM display content
++            - File format is valid PNG
++
++        Priority: P1
++        """
++        LOGGER.info(f"Testing screenshot quality for VM {running_fedora_vm.name}")
++
++        base_dir = get_data_collector_base_directory()
++        screenshot_file = f"{base_dir}/{running_fedora_vm.namespace}-{running_fedora_vm.name}-quality.png"
++
++        try:
++            LOGGER.info("Taking screenshot for quality verification")
++            run_virtctl_command(
++                command=shlex.split(f"vnc screenshot {running_fedora_vm.name} -f {screenshot_file}"),
++                namespace=running_fedora_vm.namespace,
++            )
++
++            assert os.path.exists(screenshot_file), f"Screenshot file should exist at {screenshot_file}"
++
++            file_size = os.path.getsize(screenshot_file)
++            assert file_size > 1024, f"Screenshot file size ({file_size} bytes) seems too small"
++
++            result = run(["file", screenshot_file], capture_output=True, text=True, check=True)
++            assert "PNG" in result.stdout, f"Screenshot should be PNG format, got: {result.stdout}"
++
++            LOGGER.info(f"Screenshot quality verified: {file_size} bytes, PNG format")
++
++        except Exception as exc:
++            pytest.fail(f"Screenshot quality verification failed: {exc}")
++
++    def test_thumbnail_updates_without_vnc_impact(self, running_fedora_vm):
++        """
++        Test thumbnail updates do not impact active VNC connection.
++
++        Scenario 4: Thumbnail Updates Without VNC Impact
++
++        Preconditions:
++            - Full-screen VNC active
++
++        Steps:
++            1. Open full-screen VNC connection
++            2. Take multiple screenshots simulating thumbnail refreshes
++            3. Monitor VNC connection status
++            4. Verify VNC connection remains active
++
++        Expected Result:
++            - VNC connection unaffected by thumbnail refreshes
++            - All screenshots successful
++
++        Priority: P0
++        """
++        LOGGER.info(f"Testing VNC stability during thumbnail updates for VM {running_fedora_vm.name}")
++
++        vnc_disconnected = False
++        thumbnail_refreshes = 10
++        successful_refreshes = 0
++
++        with VNCConnection(vm=running_fedora_vm) as vnc_connection:
++            LOGGER.info("Full-screen VNC connection established")
++
++            for refresh_count in range(thumbnail_refreshes):
++                try:
++                    LOGGER.info(f"Simulating thumbnail refresh {refresh_count + 1}/{thumbnail_refreshes}")
++
++                    collect_vnc_screenshot_for_vms(
++                        vm_name=running_fedora_vm.name,
++                        vm_namespace=running_fedora_vm.namespace,
++                    )
++                    successful_refreshes += 1
++
++                    if not vnc_connection.child.isalive():
++                        LOGGER.error(f"VNC connection died during thumbnail refresh {refresh_count + 1}")
++                        vnc_disconnected = True
++                        break
++
++                    time.sleep(5)
++
++                except Exception as exc:
++                    LOGGER.error(f"Thumbnail refresh {refresh_count + 1} failed: {exc}")
++
++            if vnc_connection.child.isalive():
++                LOGGER.info("VNC connection remained stable during all thumbnail refreshes")
++            else:
++                vnc_disconnected = True
++
++        assert not vnc_disconnected, "VNC connection should remain stable during thumbnail refreshes"
++        assert successful_refreshes == thumbnail_refreshes, (
++            f"All {thumbnail_refreshes} thumbnail refreshes should succeed, but only {successful_refreshes} did"
++        )
++
++
++@pytest.mark.virt
++@pytest.mark.tier2
++class TestVNCExtendedStability:
++    """
++    Extended tests for VNC console and screenshot stability.
++
++    These tests verify long-running scenarios and edge cases.
++    """
++
++    @pytest.mark.polarion("CNV-61271")
++    def test_extended_dual_usage(self, running_fedora_vm):
++        """
++        Test extended dual-tab usage scenario.
++
++        Scenario 5: Extended Dual-Tab Usage
++
++        Preconditions:
++            - VM running
++
++        Steps:
++            1. Open VNC connection simulating full-screen console
++            2. Periodically take screenshots simulating overview page refreshes
++            3. Continue for extended period (5 minutes)
++            4. Monitor VNC connection throughout
++
++        Expected Result:
++            - Continuous VNC connectivity throughout
++            - No disconnections occur
++
++        Priority: P1
++        """
++        LOGGER.info(f"Testing extended dual-tab usage for VM {running_fedora_vm.name}")
++
++        test_duration = TIMEOUT_5MIN
++        screenshot_interval = 30
++        start_time = time.time()
++        vnc_disconnected = False
++        screenshots_taken = 0
++
++        with VNCConnection(vm=running_fedora_vm) as vnc_connection:
++            LOGGER.info(f"Starting extended test for {test_duration} seconds")
++
++            while time.time() - start_time < test_duration:
++                try:
++                    elapsed = int(time.time() - start_time)
++                    LOGGER.info(f"Taking screenshot at {elapsed}s elapsed")
++
++                    collect_vnc_screenshot_for_vms(
++                        vm_name=running_fedora_vm.name,
++                        vm_namespace=running_fedora_vm.namespace,
++                    )
++                    screenshots_taken += 1
++
++                    if not vnc_connection.child.isalive():
++                        LOGGER.error(f"VNC connection died at {elapsed}s")
++                        vnc_disconnected = True
++                        break
++
++                    time.sleep(screenshot_interval)
++
++                except Exception as exc:
++                    LOGGER.error(f"Error during extended test: {exc}")
++
++            if vnc_connection.child.isalive():
++                LOGGER.info(f"VNC connection remained stable for full {test_duration}s duration")
++            else:
++                vnc_disconnected = True
++
++        assert not vnc_disconnected, f"VNC connection should remain stable for {test_duration}s"
++        assert screenshots_taken >= (test_duration // screenshot_interval), (
++            "Should have taken screenshots throughout test duration"
++        )
++
++
++@pytest.mark.virt
++@pytest.mark.tier2
++@pytest.mark.polarion("CNV-61271")
++class TestMultiGuestOS:
++    """
++    Test VNC and screenshot functionality across different guest OS types.
++
++    Scenario 6: Multiple Guest OS Types
++    """
++
++    def test_fedora_vm_screenshot_and_vnc(self, running_fedora_vm):
++        """
++        Test Fedora VM with thumbnail and VNC.
++
++        Steps:
++            1. Establish VNC connection to Fedora VM
++            2. Take screenshot
++            3. Verify both work correctly
++
++        Expected Result:
++            - Both VNC and screenshot work for Fedora
++
++        Priority: P2
++        """
++        LOGGER.info(f"Testing Fedora VM {running_fedora_vm.name}")
++
++        with VNCConnection(vm=running_fedora_vm) as vnc_connection:
++            assert vnc_connection.child.isalive(), "VNC connection should be active"
++
++            collect_vnc_screenshot_for_vms(
++                vm_name=running_fedora_vm.name,
++                vm_namespace=running_fedora_vm.namespace,
++            )
++
++            assert vnc_connection.child.isalive(), "VNC should remain active after screenshot"
++
++        LOGGER.info("Fedora VM test passed")
++
++    def test_rhel_vm_screenshot_and_vnc(self, running_rhel_vm):
++        """
++        Test RHEL VM with thumbnail and VNC.
++
++        Steps:
++            1. Establish VNC connection to RHEL VM
++            2. Take screenshot
++            3. Verify both work correctly
++
++        Expected Result:
++            - Both VNC and screenshot work for RHEL
++
++        Priority: P2
++        """
++        LOGGER.info(f"Testing RHEL VM {running_rhel_vm.name}")
++
++        with VNCConnection(vm=running_rhel_vm) as vnc_connection:
++            assert vnc_connection.child.isalive(), "VNC connection should be active"
++
++            collect_vnc_screenshot_for_vms(
++                vm_name=running_rhel_vm.name,
++                vm_namespace=running_rhel_vm.namespace,
++            )
++
++            assert vnc_connection.child.isalive(), "VNC should remain active after screenshot"
++
++        LOGGER.info("RHEL VM test passed")
++
++    @pytest.mark.high_resource_vm
++    def test_windows_vm_screenshot_and_vnc(self, running_windows_vm):
++        """
++        Test Windows VM with thumbnail and VNC.
++
++        Steps:
++            1. Establish VNC connection to Windows VM
++            2. Take screenshot
++            3. Verify both work correctly
++
++        Expected Result:
++            - Both VNC and screenshot work for Windows
++
++        Priority: P2
++        """
++        LOGGER.info(f"Testing Windows VM {running_windows_vm.name}")
++
++        with VNCConnection(vm=running_windows_vm) as vnc_connection:
++            assert vnc_connection.child.isalive(), "VNC connection should be active"
++
++            collect_vnc_screenshot_for_vms(
++                vm_name=running_windows_vm.name,
++                vm_namespace=running_windows_vm.namespace,
++            )
++
++            assert vnc_connection.child.isalive(), "VNC should remain active after screenshot"
++
++        LOGGER.info("Windows VM test passed")

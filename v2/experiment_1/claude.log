@@ -1,0 +1,52 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Test Generation Complete ✓
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Input:**  /thesis/stps/1.md (STP: CommonInstancetypesDeployment)
+**Output:** tests/infrastructure/instance_types/test_common_instancetypes_deployment.py
+
+## Phases Completed
+
+✓ **Phase 1: Repository Exploration** (utilities, fixtures, conventions)
+✓ **Phase 2: Pytest Code Generation** (4 test scenarios, 272 lines)
+✓ **Phase 3: Pyright Validation** (0 errors, 0 iterations needed)
+
+## Test File Summary
+
+**Location:** `tests/infrastructure/instance_types/test_common_instancetypes_deployment.py`
+
+**Test Scenarios Implemented:**
+
+1. **test_disable_common_instancetypes** (CNV-61256-01)
+   - Verifies common-instancetypes can be disabled via HCO CR
+   - Validates all instancetype resources are removed
+   - Priority: P0
+
+2. **test_enable_common_instancetypes** (CNV-61256-02)
+   - Verifies common-instancetypes can be enabled via HCO CR
+   - Validates instancetype resources are deployed
+   - Priority: P0
+
+3. **test_default_common_instancetypes_behavior** (CNV-61256-03)
+   - Verifies default behavior (enabled by default)
+   - Validates instancetypes are present on fresh installation
+   - Priority: P0
+
+4. **test_common_instancetypes_setting_persistence** (CNV-61256-04)
+   - Verifies setting persists across HCO reconciliation
+   - Triggers reconciliation and validates state remains unchanged
+   - Priority: P1
+
+**Key Features:**
+- Uses existing utilities: `ResourceEditorValidateHCOReconcile`, `wait_for_hco_conditions`
+- Implements helper functions: `get_common_instancetypes()`, `wait_for_common_instancetypes_state()`
+- Proper fixtures with cleanup: `hco_with_common_instancetypes_disabled`, `hco_with_common_instancetypes_enabled`
+- Comprehensive logging throughout test execution
+- Follows repository conventions (absolute imports, named arguments, descriptive variables)
+
+**Ready for Execution:**
+```bash
+uv run pytest tests/infrastructure/instance_types/test_common_instancetypes_deployment.py
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,0 +1,94 @@
+/home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+  self.headers = http_resp.getheaders()
+/home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+  self.headers = http_resp.getheaders()
+2026-02-23T10:09:50.146196 ocp_resources Namespace [32mINFO[0m Create Namespace cnv-tests-run-in-progress-ns[0m
+2026-02-23T10:09:50.146603 ocp_resources Namespace [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'cnv-tests-run-in-progress-ns'}, 'spec': {}}[0m
+2026-02-23T10:09:50.479230 ocp_resources Namespace [32mINFO[0m Wait until Namespace cnv-tests-run-in-progress-ns is created[0m
+2026-02-23T10:09:50.636044 ocp_resources Namespace [32mINFO[0m Wait for Namespace cnv-tests-run-in-progress-ns status to be Active[0m
+2026-02-23T10:09:50.792504 ocp_resources Namespace [32mINFO[0m Status of Namespace cnv-tests-run-in-progress-ns is Active[0m
+2026-02-23T10:09:50.793522 ocp_resources Namespace [32mINFO[0m Update Namespace cnv-tests-run-in-progress-ns:
+{'metadata': {'labels': {'pod-security.kubernetes.io/enforce': 'privileged', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}, 'name': 'cnv-tests-run-in-progress-ns'}}[0m
+2026-02-23T10:09:50.955375 ocp_resources ConfigMap [32mINFO[0m Create ConfigMap cnv-tests-run-in-progress[0m
+2026-02-23T10:09:50.955748 ocp_resources ConfigMap [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'cnv-tests-run-in-progress', 'namespace': 'cnv-tests-run-in-progress-ns'}, 'data': '*******'}[0m
+2026-02-23T10:09:51.272053 ocp_resources ConfigMap [32mINFO[0m Wait until ConfigMap cnv-tests-run-in-progress is created[0m
+============================= test session starts ==============================
+platform linux -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/fedora/thesis/openshift-virtualization-tests
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.12.1, benchmark-5.2.3, html-4.1.1, order-1.3.0, testconfig-0.2.0, metadata-3.1.1, mock-3.15.1, repeat-0.9.4, progress-1.4.0, dependency-0.6.0, jira-0.3.22
+collected 8 items
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py 
+TEST: TestCommonInstancetypesDeploymentDisabled.test_common_cluster_instancetypes_absent_when_disabled STATUS: [0;32mPASSED[0m
+. [ 12%]
+
+_ 1 of 8 completed, 1 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py 
+TEST: TestCommonInstancetypesDeploymentDisabled.test_common_cluster_preferences_absent_when_disabled STATUS: [0;32mPASSED[0m
+. [ 25%]
+
+_ 2 of 8 completed, 2 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py 
+TEST: TestCommonInstancetypesDeploymentEnabled.test_common_cluster_instancetypes_present_when_enabled STATUS: [0;32mPASSED[0m
+. [ 37%]
+
+_ 3 of 8 completed, 3 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py 
+TEST: TestCommonInstancetypesDeploymentEnabled.test_common_cluster_preferences_present_when_enabled STATUS: [0;32mPASSED[0m
+. [ 50%]
+
+_ 4 of 8 completed, 4 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py 
+TEST: TestCommonInstancetypesDeploymentDefault.test_common_instancetypes_deployed_by_default STATUS: [0;32mPASSED[0m
+. [ 62%]
+
+_ 5 of 8 completed, 5 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py . [ 75%]
+
+TEST: TestCommonInstancetypesDeploymentDefault.test_common_preferences_deployed_by_default STATUS: [0;32mPASSED[0m
+
+_ 6 of 8 completed, 6 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py 
+TEST: TestCommonInstancetypesDeploymentPersistence.test_disabled_setting_persists_after_reconciliation STATUS: [0;32mPASSED[0m
+. [ 87%]
+
+_ 7 of 8 completed, 7 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/deprecated_api/test_deprecation_audit_logs.py 
+TEST: test_deprecated_apis_in_audit_logs STATUS: [1;33mQUARANTINED[0m
+[NOTRUN] quarantined: Timeout after 180s retrieving logs Tracked <a href='https://issues.redhat.com/browse/CNV-76514' target='_blank'>CNV-76514</a>
+_ 8 of 8 completed, 7 Pass, 0 Fail, 0 Skip, 0 XPass, 1 XFail, 0 Error, 0 ReRun _
+                                                                         [100%]2026-02-23T10:18:07.896687 ocp_resources ConfigMap [32mINFO[0m Delete ConfigMap cnv-tests-run-in-progress[0m
+2026-02-23T10:18:08.219241 ocp_resources ConfigMap [32mINFO[0m Deleting {'kind': 'ConfigMap', 'apiVersion': 'v1', 'metadata': {'name': 'cnv-tests-run-in-progress', 'namespace': 'cnv-tests-run-in-progress-ns', 'uid': '0e2d54d3-8a3c-48ee-b18b-ce3e0915b4a8', 'resourceVersion': '23155379', 'creationTimestamp': '2026-02-23T10:09:51Z', 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-02-23T10:09:51Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:data': {'.': {}, 'f:host': {}, 'f:pytest_cmd': {}, 'f:run-in-container': {}, 'f:running_from_dir': {}, 'f:session-id': {}, 'f:user': {}}}}]}, 'data': '*******'}[0m
+2026-02-23T10:18:08.385647 ocp_resources ConfigMap [32mINFO[0m Wait until ConfigMap cnv-tests-run-in-progress is deleted[0m
+2026-02-23T10:18:08.700473 ocp_resources Namespace [32mINFO[0m Delete Namespace cnv-tests-run-in-progress-ns[0m
+2026-02-23T10:18:09.011966 ocp_resources Namespace [32mINFO[0m Deleting {'kind': 'Namespace', 'apiVersion': 'v1', 'metadata': {'name': 'cnv-tests-run-in-progress-ns', 'uid': '0d44f275-8ccc-42ef-961b-5275a23a2284', 'resourceVersion': '23155374', 'creationTimestamp': '2026-02-23T10:09:50Z', 'labels': {'kubernetes.io/metadata.name': 'cnv-tests-run-in-progress-ns', 'pod-security.kubernetes.io/audit': 'restricted', 'pod-security.kubernetes.io/audit-version': 'latest', 'pod-security.kubernetes.io/enforce': 'privileged', 'pod-security.kubernetes.io/warn': 'restricted', 'pod-security.kubernetes.io/warn-version': 'latest', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}, 'annotations': {'openshift.io/sa.scc.mcs': 's0:c28,c17', 'openshift.io/sa.scc.supplemental-groups': '1000790000/10000', 'openshift.io/sa.scc.uid-range': '1000790000/10000', 'security.openshift.io/MinimallySufficientPodSecurityStandard': 'restricted'}, 'managedFields': [{'manager': 'cluster-policy-controller', 'operation': 'Apply', 'apiVersion': 'v1', 'time': '2026-02-23T10:09:50Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'f:openshift.io/sa.scc.mcs': {}, 'f:openshift.io/sa.scc.supplemental-groups': {}, 'f:openshift.io/sa.scc.uid-range': {}}}}}, {'manager': 'pod-security-admission-label-synchronization-controller', 'operation': 'Apply', 'apiVersion': 'v1', 'time': '2026-02-23T10:09:50Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'f:security.openshift.io/MinimallySufficientPodSecurityStandard': {}}, 'f:labels': {'f:pod-security.kubernetes.io/audit': {}, 'f:pod-security.kubernetes.io/audit-version': {}, 'f:pod-security.kubernetes.io/warn': {}, 'f:pod-security.kubernetes.io/warn-version': {}}}}}, {'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-02-23T10:09:50Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:labels': {'.': {}, 'f:kubernetes.io/metadata.name': {}, 'f:pod-security.kubernetes.io/enforce': {}, 'f:security.openshift.io/scc.podSecurityLabelSync': {}}}}}]}, 'spec': {'finalizers': ['kubernetes']}, 'status': {'phase': 'Active'}}[0m
+2026-02-23T10:18:09.180476 ocp_resources Namespace [32mINFO[0m Wait until Namespace cnv-tests-run-in-progress-ns is deleted[0m
+2026-02-23T10:18:08.386108 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)[0m
+2026-02-23T10:18:08.544525 timeout_sampler [32mINFO[0m Elapsed time: 0.00028061866760253906 [0:00:00.000281][0m
+2026-02-23T10:18:09.181303 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)[0m
+2026-02-23T10:18:16.271624 timeout_sampler [32mINFO[0m Elapsed time: 6.9344117641448975 [0:00:06.934412][0m
+========== 7 passed, 10 warnings, 1 quarantined in 504.83s (0:08:24) ===========
+
+=============================== warnings summary ===============================
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py: 5 warnings
+tests/deprecated_api/test_deprecation_audit_logs.py: 3 warnings
+.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: 2 warnings
+  /home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+    self.headers = http_resp.getheaders()
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentDisabled::test_common_cluster_instancetypes_absent_when_disabled
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentDisabled::test_common_cluster_instancetypes_absent_when_disabled
+  /home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/ocp_resources/resource.py:1612: FutureWarning: 'client' arg will be mandatory in the next major release. `config_file` and `context` args will be removed.
+    super().__init__(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========== 7 passed, 12 warnings, 1 quarantined in 504.83s (0:08:24) ===========

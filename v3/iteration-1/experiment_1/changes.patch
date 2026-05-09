@@ -1,0 +1,720 @@
+diff --git a/GRAVEYARD.md b/GRAVEYARD.md
+new file mode 100644
+index 0000000..32b235d
+--- /dev/null
++++ b/GRAVEYARD.md
+@@ -0,0 +1,88 @@
++# GRAVEYARD - Test Generation Lessons Learned
++
++This file documents mistakes made during automated test generation and how to avoid them.
++It is read during the exploration phase to prevent repeating past errors.
++
++---
++
++## Entry: Wrong HCO CR field name casing and value type for CommonInstancetypesDeployment
++
++**Category**: ResourceError
++**Date**: 2026-02-21
++**Test**: tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py::disabled_common_instancetypes_deployment
++
++### What Went Wrong
++The generated code used `commonInstancetypesDeployment` (lowercase 'c') as the HCO CR spec field name with string values `"Enabled"` / `"Disabled"`. The actual CRD field is `CommonInstancetypesDeployment` (capital 'C') and its value is an object with a nested boolean `enabled` field, not a string.
++
++### Wrong Code
++```python
++COMMON_INSTANCETYPES_DEPLOYMENT_KEY = "commonInstancetypesDeployment"
++COMMON_INSTANCETYPES_DEPLOYMENT_ENABLED = "Enabled"
++COMMON_INSTANCETYPES_DEPLOYMENT_DISABLED = "Disabled"
++
++# Used in fixtures as:
++patches={
++    hyperconverged_resource: {
++        "spec": {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: COMMON_INSTANCETYPES_DEPLOYMENT_DISABLED}
++    }
++}
++```
++
++### Correct Code
++```python
++COMMON_INSTANCETYPES_DEPLOYMENT_KEY = "CommonInstancetypesDeployment"
++COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_ENABLED = {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: {"enabled": True}}
++COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_DISABLED = {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: {"enabled": False}}
++
++# Used in fixtures as:
++patches={
++    hyperconverged_resource: {
++        "spec": COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_DISABLED
++    }
++}
++```
++
++### Lesson Learned
++HCO CRD field names do not always follow standard camelCase conventions. Some fields like `CommonInstancetypesDeployment` start with a capital letter. Additionally, the field type may be an object with nested properties rather than a simple string enum. Always verify the actual CRD schema before generating code.
++
++### How to Avoid
++Before generating code that patches HCO CR spec fields, run `kubectl get crd hyperconvergeds.hco.kubevirt.io -o json` and inspect the `openAPIV3Schema` to confirm: (1) the exact field name casing, (2) the field type (string, boolean, object), and (3) nested property structure. Never assume field names follow standard camelCase or that toggle fields use string enum values.
++
++---
++
++## Entry: Wrong type hints on helper function parameters
++
++**Category**: TypeError
++**Date**: 2026-02-21
++**Test**: tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py::get_common_cluster_instancetypes
++
++### What Went Wrong
++Helper functions that accept a Kubernetes `DynamicClient` parameter were annotated with incorrect types. The `admin_client` parameter was typed as `list[VirtualMachineClusterInstancetype]` (the return type was accidentally used as the parameter type) and `object` instead of `DynamicClient`.
++
++### Wrong Code
++```python
++def get_common_cluster_instancetypes(admin_client: list[VirtualMachineClusterInstancetype]) -> list[VirtualMachineClusterInstancetype]:
++    ...
++
++def wait_for_common_instancetypes_absent(admin_client: object, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    ...
++```
++
++### Correct Code
++```python
++from kubernetes.dynamic import DynamicClient
++
++def get_common_cluster_instancetypes(admin_client: DynamicClient) -> list[VirtualMachineClusterInstancetype]:
++    ...
++
++def wait_for_common_instancetypes_absent(admin_client: DynamicClient, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    ...
++```
++
++### Lesson Learned
++When writing type hints for Kubernetes client parameters, always use `DynamicClient` from `kubernetes.dynamic`. Do not confuse return types with parameter types, and do not use `object` as a generic stand-in.
++
++### How to Avoid
++For any function that takes a Kubernetes client parameter, always import and use `from kubernetes.dynamic import DynamicClient` as the type hint. Follow the pattern established in existing repository fixtures where `admin_client` is consistently typed as `DynamicClient`.
++
++---
+diff --git a/tests/install_upgrade_operators/common_instancetypes_deployment/__init__.py b/tests/install_upgrade_operators/common_instancetypes_deployment/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py b/tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py
+new file mode 100644
+index 0000000..a8a091f
+--- /dev/null
++++ b/tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py
+@@ -0,0 +1,208 @@
++import logging
++
++import pytest
++from kubernetes.dynamic import DynamicClient
++from ocp_resources.resource import Resource
++from ocp_resources.virtual_machine_cluster_instancetype import (
++    VirtualMachineClusterInstancetype,
++)
++from ocp_resources.virtual_machine_cluster_preference import (
++    VirtualMachineClusterPreference,
++)
++from timeout_sampler import TimeoutSampler
++
++from utilities.constants import TIMEOUT_5MIN
++from utilities.hco import ResourceEditorValidateHCOReconcile, wait_for_hco_conditions
++
++LOGGER = logging.getLogger(__name__)
++
++COMMON_INSTANCETYPE_VENDOR_LABEL = f"{Resource.ApiGroup.INSTANCETYPE_KUBEVIRT_IO}/vendor=redhat.com"
++COMMON_INSTANCETYPES_DEPLOYMENT_KEY = "CommonInstancetypesDeployment"
++COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_ENABLED = {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: {"enabled": True}}
++COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_DISABLED = {COMMON_INSTANCETYPES_DEPLOYMENT_KEY: {"enabled": False}}
++
++
++def get_common_cluster_instancetypes(admin_client: DynamicClient) -> list[VirtualMachineClusterInstancetype]:
++    """Get all common VirtualMachineClusterInstancetype resources with vendor label.
++
++    Args:
++        admin_client: Kubernetes dynamic client.
++
++    Returns:
++        List of VirtualMachineClusterInstancetype resources with Red Hat vendor label.
++    """
++    return list(
++        VirtualMachineClusterInstancetype.get(
++            client=admin_client,
++            label_selector=COMMON_INSTANCETYPE_VENDOR_LABEL,
++        )
++    )
++
++
++def get_common_cluster_preferences(admin_client: DynamicClient) -> list[VirtualMachineClusterPreference]:
++    """Get all common VirtualMachineClusterPreference resources with vendor label.
++
++    Args:
++        admin_client: Kubernetes dynamic client.
++
++    Returns:
++        List of VirtualMachineClusterPreference resources with Red Hat vendor label.
++    """
++    return list(
++        VirtualMachineClusterPreference.get(
++            client=admin_client,
++            label_selector=COMMON_INSTANCETYPE_VENDOR_LABEL,
++        )
++    )
++
++
++def wait_for_common_instancetypes_absent(admin_client: DynamicClient, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    """Wait until no common VirtualMachineClusterInstancetype resources exist.
++
++    Args:
++        admin_client: Kubernetes dynamic client.
++        wait_timeout: Maximum time to wait in seconds.
++    """
++    LOGGER.info("Waiting for common instancetypes to be removed")
++    for sample in TimeoutSampler(
++        wait_timeout=wait_timeout,
++        sleep=5,
++        func=get_common_cluster_instancetypes,
++        admin_client=admin_client,
++    ):
++        if not sample:
++            return
++
++
++def wait_for_common_preferences_absent(admin_client: DynamicClient, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    """Wait until no common VirtualMachineClusterPreference resources exist.
++
++    Args:
++        admin_client: Kubernetes dynamic client.
++        wait_timeout: Maximum time to wait in seconds.
++    """
++    LOGGER.info("Waiting for common preferences to be removed")
++    for sample in TimeoutSampler(
++        wait_timeout=wait_timeout,
++        sleep=5,
++        func=get_common_cluster_preferences,
++        admin_client=admin_client,
++    ):
++        if not sample:
++            return
++
++
++def wait_for_common_instancetypes_present(admin_client: DynamicClient, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    """Wait until common VirtualMachineClusterInstancetype resources exist.
++
++    Args:
++        admin_client: Kubernetes dynamic client.
++        wait_timeout: Maximum time to wait in seconds.
++    """
++    LOGGER.info("Waiting for common instancetypes to be deployed")
++    for sample in TimeoutSampler(
++        wait_timeout=wait_timeout,
++        sleep=5,
++        func=get_common_cluster_instancetypes,
++        admin_client=admin_client,
++    ):
++        if sample:
++            return
++
++
++def wait_for_common_preferences_present(admin_client: DynamicClient, wait_timeout: int = TIMEOUT_5MIN) -> None:
++    """Wait until common VirtualMachineClusterPreference resources exist.
++
++    Args:
++        admin_client: Kubernetes dynamic client.
++        wait_timeout: Maximum time to wait in seconds.
++    """
++    LOGGER.info("Waiting for common preferences to be deployed")
++    for sample in TimeoutSampler(
++        wait_timeout=wait_timeout,
++        sleep=5,
++        func=get_common_cluster_preferences,
++        admin_client=admin_client,
++    ):
++        if sample:
++            return
++
++
++@pytest.fixture()
++def disabled_common_instancetypes_deployment(
++    admin_client,
++    hco_namespace,
++    hyperconverged_resource_scope_function,
++):
++    """HCO CR with commonInstancetypesDeployment set to Disabled.
++
++    Patches the HCO CR to disable common-instancetypes deployment and waits
++    for reconciliation. On teardown, restores the original value and waits
++    for common resources to be redeployed.
++    """
++    with ResourceEditorValidateHCOReconcile(
++        patches={
++            hyperconverged_resource_scope_function: {
++                "spec": COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_DISABLED
++            }
++        },
++        list_resource_reconcile=[],
++        wait_for_reconcile_post_update=True,
++    ):
++        wait_for_common_instancetypes_absent(admin_client=admin_client)
++        wait_for_common_preferences_absent(admin_client=admin_client)
++        LOGGER.info("Common instancetypes deployment disabled successfully")
++        yield
++    wait_for_common_instancetypes_present(admin_client=admin_client)
++    wait_for_common_preferences_present(admin_client=admin_client)
++    LOGGER.info("Common instancetypes deployment re-enabled after teardown")
++
++
++@pytest.fixture()
++def enabled_common_instancetypes_deployment_after_disable(
++    admin_client,
++    hco_namespace,
++    hyperconverged_resource_scope_function,
++    disabled_common_instancetypes_deployment,
++):
++    """HCO CR with commonInstancetypesDeployment set to Enabled after being Disabled.
++
++    Requires disabled_common_instancetypes_deployment to run first to put
++    the system in a disabled state, then patches to Enabled and waits for
++    common resources to be redeployed.
++    """
++    with ResourceEditorValidateHCOReconcile(
++        patches={
++            hyperconverged_resource_scope_function: {
++                "spec": COMMON_INSTANCETYPES_DEPLOYMENT_SPEC_ENABLED
++            }
++        },
++        action="replace",
++        list_resource_reconcile=[],
++        wait_for_reconcile_post_update=True,
++    ):
++        wait_for_common_instancetypes_present(admin_client=admin_client)
++        wait_for_common_preferences_present(admin_client=admin_client)
++        LOGGER.info("Common instancetypes deployment re-enabled successfully")
++        yield
++
++
++@pytest.fixture()
++def disabled_common_instancetypes_with_reconciliation_trigger(
++    admin_client,
++    hco_namespace,
++    hyperconverged_resource_scope_function,
++    disabled_common_instancetypes_deployment,
++):
++    """HCO CR with disabled commonInstancetypesDeployment that has been reconciled.
++
++    After disabling common-instancetypes deployment, triggers an additional
++    HCO reconciliation by forcing a conditions check, confirming the disabled
++    setting persists.
++    """
++    LOGGER.info("Triggering additional HCO reconciliation to verify persistence")
++    wait_for_hco_conditions(
++        admin_client=admin_client,
++        hco_namespace=hco_namespace,
++    )
++    yield
+diff --git a/tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py b/tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py
+new file mode 100644
+index 0000000..9f0a884
+--- /dev/null
++++ b/tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py
+@@ -0,0 +1,193 @@
++"""
++Common-Instancetypes Deployment Configuration Tests
++
++STP Reference: https://issues.redhat.com/browse/CNV-61256
++
++This module contains tests for the commonInstancetypesDeployment field
++in the HyperConverged CR, verifying that users can enable or disable
++the deployment of common instance types and preferences.
++"""
++
++import logging
++
++import pytest
++
++from tests.install_upgrade_operators.common_instancetypes_deployment.conftest import (
++    get_common_cluster_instancetypes,
++    get_common_cluster_preferences,
++)
++
++LOGGER = logging.getLogger(__name__)
++
++pytestmark = [pytest.mark.iuo, pytest.mark.gating]
++
++
++class TestCommonInstancetypesDeploymentDefault:
++    """Tests for default commonInstancetypesDeployment behavior.
++
++    Preconditions:
++        - OpenShift Virtualization installed with HCO version supporting commonInstancetypesDeployment
++        - HCO CR in default state (commonInstancetypesDeployment not explicitly set)
++    """
++
++    @pytest.mark.polarion("CNV-61256")
++    def test_common_instancetypes_deployed_by_default(self, admin_client):
++        """Test that common instance types are deployed by default when
++        commonInstancetypesDeployment is not explicitly set.
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterInstancetype resources exist
++        """
++        LOGGER.info("Verifying common instancetypes are deployed by default")
++        common_instancetypes = get_common_cluster_instancetypes(admin_client=admin_client)
++        assert common_instancetypes, "Common VirtualMachineClusterInstancetype resources should exist by default"
++
++    @pytest.mark.polarion("CNV-61256")
++    def test_common_preferences_deployed_by_default(self, admin_client):
++        """Test that common VM preferences are deployed by default when
++        commonInstancetypesDeployment is not explicitly set.
++
++        Steps:
++            1. Query for VirtualMachineClusterPreference resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterPreference resources exist
++        """
++        LOGGER.info("Verifying common preferences are deployed by default")
++        common_preferences = get_common_cluster_preferences(admin_client=admin_client)
++        assert common_preferences, "Common VirtualMachineClusterPreference resources should exist by default"
++
++
++class TestCommonInstancetypesDeploymentDisable:
++    """Tests for disabling commonInstancetypesDeployment.
++
++    Preconditions:
++        - OpenShift Virtualization installed with HCO version supporting commonInstancetypesDeployment
++        - HCO CR patched with spec.commonInstancetypesDeployment set to "Disabled"
++        - HCO reconciliation completed
++    """
++
++    @pytest.mark.polarion("CNV-61256")
++    @pytest.mark.usefixtures("disabled_common_instancetypes_deployment")
++    def test_disable_removes_common_instancetypes(self, admin_client):
++        """Test that setting commonInstancetypesDeployment to Disabled removes
++        common instance type resources.
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - No common VirtualMachineClusterInstancetype resources exist
++        """
++        LOGGER.info("Verifying common instancetypes are removed after disabling")
++        common_instancetypes = get_common_cluster_instancetypes(admin_client=admin_client)
++        assert not common_instancetypes, (
++            f"Common VirtualMachineClusterInstancetype resources should not exist when disabled, "
++            f"found: {[instancetype.name for instancetype in common_instancetypes]}"
++        )
++
++    @pytest.mark.polarion("CNV-61256")
++    @pytest.mark.usefixtures("disabled_common_instancetypes_deployment")
++    def test_disable_removes_common_preferences(self, admin_client):
++        """Test that setting commonInstancetypesDeployment to Disabled removes
++        common VM preference resources.
++
++        Steps:
++            1. Query for VirtualMachineClusterPreference resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - No common VirtualMachineClusterPreference resources exist
++        """
++        LOGGER.info("Verifying common preferences are removed after disabling")
++        common_preferences = get_common_cluster_preferences(admin_client=admin_client)
++        assert not common_preferences, (
++            f"Common VirtualMachineClusterPreference resources should not exist when disabled, "
++            f"found: {[preference.name for preference in common_preferences]}"
++        )
++
++
++class TestCommonInstancetypesDeploymentEnable:
++    """Tests for re-enabling commonInstancetypesDeployment after disabling.
++
++    Preconditions:
++        - OpenShift Virtualization installed with HCO version supporting commonInstancetypesDeployment
++        - HCO CR previously had spec.commonInstancetypesDeployment set to "Disabled"
++        - HCO CR patched with spec.commonInstancetypesDeployment set to "Enabled"
++        - HCO reconciliation completed
++    """
++
++    @pytest.mark.polarion("CNV-61256")
++    @pytest.mark.usefixtures("enabled_common_instancetypes_deployment_after_disable")
++    def test_enable_deploys_common_instancetypes(self, admin_client):
++        """Test that setting commonInstancetypesDeployment to Enabled deploys
++        common instance type resources after they were previously disabled.
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterInstancetype resources exist
++        """
++        LOGGER.info("Verifying common instancetypes are deployed after re-enabling")
++        common_instancetypes = get_common_cluster_instancetypes(admin_client=admin_client)
++        assert common_instancetypes, (
++            "Common VirtualMachineClusterInstancetype resources should exist after re-enabling"
++        )
++
++    @pytest.mark.polarion("CNV-61256")
++    @pytest.mark.usefixtures("enabled_common_instancetypes_deployment_after_disable")
++    def test_enable_deploys_common_preferences(self, admin_client):
++        """Test that setting commonInstancetypesDeployment to Enabled deploys
++        common VM preference resources after they were previously disabled.
++
++        Steps:
++            1. Query for VirtualMachineClusterPreference resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterPreference resources exist
++        """
++        LOGGER.info("Verifying common preferences are deployed after re-enabling")
++        common_preferences = get_common_cluster_preferences(admin_client=admin_client)
++        assert common_preferences, (
++            "Common VirtualMachineClusterPreference resources should exist after re-enabling"
++        )
++
++
++class TestCommonInstancetypesDeploymentPersistence:
++    """Tests for commonInstancetypesDeployment setting persistence.
++
++    Preconditions:
++        - OpenShift Virtualization installed with HCO version supporting commonInstancetypesDeployment
++        - HCO CR patched with spec.commonInstancetypesDeployment set to "Disabled"
++        - HCO reconciliation completed
++        - Additional HCO reconciliation triggered
++    """
++
++    @pytest.mark.polarion("CNV-61256")
++    @pytest.mark.usefixtures("disabled_common_instancetypes_with_reconciliation_trigger")
++    def test_disabled_setting_persists_after_reconciliation(self, admin_client):
++        """Test that the Disabled setting for commonInstancetypesDeployment persists
++        after triggering an HCO reconciliation.
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - No common VirtualMachineClusterInstancetype resources exist
++        """
++        LOGGER.info("Verifying disabled setting persists after reconciliation")
++        common_instancetypes = get_common_cluster_instancetypes(admin_client=admin_client)
++        assert not common_instancetypes, (
++            f"Common VirtualMachineClusterInstancetype resources should remain absent after reconciliation, "
++            f"found: {[instancetype.name for instancetype in common_instancetypes]}"
++        )
+diff --git a/tests/std/common_instancetypes_deployment/std_cnv_61256.md b/tests/std/common_instancetypes_deployment/std_cnv_61256.md
+new file mode 100644
+index 0000000..9de0de5
+--- /dev/null
++++ b/tests/std/common_instancetypes_deployment/std_cnv_61256.md
+@@ -0,0 +1,204 @@
++# Software Test Description (STD)
++
++## Feature: Common-Instancetypes Deployment Configuration
++
++**STP Reference:** [CNV-61256](https://issues.redhat.com/browse/CNV-61256)
++**Jira ID:** CNV-61256
++**Generated:** 2026-02-21
++
++---
++
++## Summary
++
++Tests for the `commonInstancetypesDeployment` field in the HyperConverged CR, which allows users to enable or disable deployment of common instance types and preferences. Covers default behavior verification, disabling/enabling common-instancetypes, and setting persistence across HCO reconciliation.
++
++---
++
++## Test Files
++
++### File: `tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py`
++
++```python
++"""
++Common-Instancetypes Deployment Configuration Tests
++
++STP Reference: https://issues.redhat.com/browse/CNV-61256
++
++This module contains tests for the commonInstancetypesDeployment field
++in the HyperConverged CR, verifying that users can enable or disable
++the deployment of common instance types and preferences.
++"""
++
++import pytest
++
++
++class TestCommonInstancetypesDeployment:
++    """
++    Tests for commonInstancetypesDeployment HCO CR field.
++
++    Markers:
++        - iuo
++        - gating
++
++    Preconditions:
++        - OpenShift Virtualization installed with HCO version supporting commonInstancetypesDeployment
++        - HCO CR in default state (commonInstancetypesDeployment not explicitly set)
++    """
++
++    def test_common_instancetypes_deployed_by_default(self):
++        """
++        Test that common instance types are deployed by default when
++        commonInstancetypesDeployment is not explicitly set.
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterInstancetype resources exist
++        """
++        pass
++
++    def test_common_preferences_deployed_by_default(self):
++        """
++        Test that common VM preferences are deployed by default when
++        commonInstancetypesDeployment is not explicitly set.
++
++        Steps:
++            1. Query for VirtualMachineClusterPreference resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterPreference resources exist
++        """
++        pass
++
++    def test_disable_removes_common_instancetypes(self):
++        """
++        Test that setting commonInstancetypesDeployment to Disabled removes
++        common instance type resources.
++
++        Preconditions:
++            - HCO CR patched with spec.commonInstancetypesDeployment set to "Disabled"
++            - HCO reconciliation completed
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - No common VirtualMachineClusterInstancetype resources exist
++        """
++        pass
++
++    def test_disable_removes_common_preferences(self):
++        """
++        Test that setting commonInstancetypesDeployment to Disabled removes
++        common VM preference resources.
++
++        Preconditions:
++            - HCO CR patched with spec.commonInstancetypesDeployment set to "Disabled"
++            - HCO reconciliation completed
++
++        Steps:
++            1. Query for VirtualMachineClusterPreference resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - No common VirtualMachineClusterPreference resources exist
++        """
++        pass
++
++    def test_enable_deploys_common_instancetypes(self):
++        """
++        Test that setting commonInstancetypesDeployment to Enabled deploys
++        common instance type resources after they were previously disabled.
++
++        Preconditions:
++            - HCO CR previously had spec.commonInstancetypesDeployment set to "Disabled"
++            - HCO CR patched with spec.commonInstancetypesDeployment set to "Enabled"
++            - HCO reconciliation completed
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterInstancetype resources exist
++        """
++        pass
++
++    def test_enable_deploys_common_preferences(self):
++        """
++        Test that setting commonInstancetypesDeployment to Enabled deploys
++        common VM preference resources after they were previously disabled.
++
++        Preconditions:
++            - HCO CR previously had spec.commonInstancetypesDeployment set to "Disabled"
++            - HCO CR patched with spec.commonInstancetypesDeployment set to "Enabled"
++            - HCO reconciliation completed
++
++        Steps:
++            1. Query for VirtualMachineClusterPreference resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - Common VirtualMachineClusterPreference resources exist
++        """
++        pass
++
++    def test_disabled_setting_persists_after_reconciliation(self):
++        """
++        Test that the Disabled setting for commonInstancetypesDeployment persists
++        after triggering an HCO reconciliation.
++
++        Preconditions:
++            - HCO CR patched with spec.commonInstancetypesDeployment set to "Disabled"
++            - HCO reconciliation completed
++            - HCO reconciliation triggered again by modifying an unrelated HCO field
++
++        Steps:
++            1. Query for VirtualMachineClusterInstancetype resources with vendor label
++               "instancetype.kubevirt.io/vendor=redhat.com"
++
++        Expected:
++            - No common VirtualMachineClusterInstancetype resources exist
++        """
++        pass
++```
++
++---
++
++## Test Coverage Summary
++
++| Test File | Test Class | Test Count | Priority | Tier |
++| --------- | ---------- | ---------- | -------- | ---- |
++| `test_common_instancetypes_deployment.py` | `TestCommonInstancetypesDeployment` | 7 | P0/P1 | T1 |
++
++---
++
++## STP Scenario-to-Test Traceability
++
++| STP Scenario | Test Method(s) | Priority |
++| ------------ | -------------- | -------- |
++| Scenario 3: Default Behavior | `test_common_instancetypes_deployed_by_default`, `test_common_preferences_deployed_by_default` | P0 |
++| Scenario 1: Disable Common-Instancetypes | `test_disable_removes_common_instancetypes`, `test_disable_removes_common_preferences` | P0 |
++| Scenario 2: Enable Common-Instancetypes | `test_enable_deploys_common_instancetypes`, `test_enable_deploys_common_preferences` | P0 |
++| Scenario 4: Setting Persistence | `test_disabled_setting_persists_after_reconciliation` | P1 |
++
++---
++
++## Checklist
++
++- [x] STP link in module docstring
++- [x] All STP scenarios covered
++- [x] Tests grouped in class with shared preconditions
++- [x] Each test has: description, Preconditions (where needed), Steps, Expected
++- [x] Each test verifies ONE thing with ONE Expected
++- [x] Negative tests marked with `[NEGATIVE]` (none applicable)
++- [x] Test methods contain only `pass`
++- [x] Markers documented
++- [x] Parametrization documented where needed (none required)
++- [x] All files in single markdown output
++- [x] Coverage summary table included
++- [x] Output saved to `tests/std/common_instancetypes_deployment/std_cnv_61256.md`

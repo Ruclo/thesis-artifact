@@ -1,0 +1,246 @@
+Act as a Senior SDET. I need you to implement the test plan below.
+
+I am currently in the root of the repository. Before generating any code, you must perform a "Context Exploration" phase to understand the existing testing architecture.
+
+**Step 1: Context Exploration**
+1.  Scan the `docs/` folder to understand the project's testing conventions or architecture documentation.
+2.  Analyze the `libs/` and `utilities/` folders. Identify existing helper classes, fixtures, and utility functions.
+3.  Look for existing test files in `tests/` folder to see how they import these utilities and what standard `pytest` fixtures are available (e.g., clients, namespace helpers). Examine how tests are linked to requirements.
+
+**Step 2: Code Generation**
+* Implement the scenarios from the Test Plan below.
+* **Strict Constraint:** Do not hallucinate new utilities. You MUST use the existing functions and classes you found in `libs/` and `utilities/`. If a specific helper is missing, implement it locally in the test file using the base clients found.
+
+**Test Plan (STP):**
+# Openshift-virtualization-tests Test plan
+
+## **CPU Hotplug Logic Exceeding Maximum Limits - Quality Engineering Plan**
+
+---
+
+### Metadata & Tracking
+
+| Field                  | Details                                                           |
+| :--------------------- | :---------------------------------------------------------------- |
+| **Enhancement(s)**     | N/A - Bug Fix                                                     |
+| **Feature in Jira**    | [CNV-61263](https://issues.redhat.com/browse/CNV-61263)           |
+| **Jira Tracking**      | [CNV-57352](https://issues.redhat.com/browse/CNV-57352) (Bug Fix) |
+| **QE Owner(s)**        | Victor Millac                                                     |
+| **Owning SIG**         | sig-compute                                                       |
+| **Participating SIGs** | sig-compute                                                       |
+| **Current Status**     | Draft                                                             |
+
+### Related GitHub Pull Requests
+
+| PR Link                                                                    | Repository        | Source Jira Issue | Description                                                        |
+| :------------------------------------------------------------------------- | :---------------- | :---------------- | :----------------------------------------------------------------- |
+| [kubevirt/kubevirt#14511](https://github.com/kubevirt/kubevirt/pull/14511) | kubevirt/kubevirt | CNV-57352         | [release-1.5] defaults: Limit MaxSockets based on maximum of vcpus |
+
+**Note:** All PRs listed above were reviewed for implementation details, code changes, and review comments to inform this test plan.
+
+---
+
+### **I. Motivation and Requirements Review (QE Review Guidelines)**
+
+#### **1. Requirement & User Story Review Checklist**
+
+| Check                                  | Done | Details/Notes                                                                                                                    | Comments |
+| :------------------------------------- | :--- | :------------------------------------------------------------------------------------------------------------------------------- | :------- |
+| **Review Requirements**                | [x]  | Reviewed bug: CPU hotplug allows exceeding maximum vCPU limits, causing unpredictable behavior. MaxSockets not properly limited. |          |
+| **Understand Value**                   | [x]  | Prevents resource overcommit and unexpected guest behavior from exceeding CPU limits.                                            |          |
+| **Customer Use Cases**                 | [x]  | Users enabling CPU hotplug and adding CPUs beyond safe limits.                                                                   |          |
+| **Testability**                        | [x]  | Testable by attempting to hotplug CPUs beyond limits.                                                                            |          |
+| **Acceptance Criteria**                | [x]  | MaxSockets should be limited based on maximum vCPUs allowed.                                                                     |          |
+| **Non-Functional Requirements (NFRs)** | [x]  | Resource safety; Predictable behavior.                                                                                           |          |
+
+#### **2. Technology and Design Review**
+
+| Check                            | Done | Details/Notes                                                                                 | Comments |
+| :------------------------------- | :--- | :-------------------------------------------------------------------------------------------- | :------- |
+| **Developer Handoff/QE Kickoff** | [ ]  | Pending - need walkthrough on MaxSockets calculation logic.                                   |          |
+| **Technology Challenges**        | [x]  | Fix limits MaxSockets based on maximum allowed vCPUs to prevent exceeding limits via hotplug. |          |
+| **Test Environment Needs**       | [x]  | Standard cluster, CPU hotplug capable VM.                                                     |          |
+| **API Extensions**               | [x]  | MaxSockets calculation changed in defaults.                                                   |          |
+| **Topology Considerations**      | [x]  | Standard topology.                                                                            |          |
+
+### **II. Software Test Plan (STP)**
+
+#### **1. Scope of Testing**
+
+**In Scope:**
+
+- Verify MaxSockets is limited based on maximum vCPUs
+- Verify CPU hotplug cannot exceed limits
+- Verify VM behaves correctly at maximum CPU
+- Verify error handling when attempting to exceed limits
+
+**Document Conventions:**
+
+- vCPU: Virtual CPU allocated to VM
+- MaxSockets: Maximum number of CPU sockets for hotplug
+- CPU Hotplug: Adding CPUs to running VM without reboot
+
+#### **2. Testing Goals**
+
+- [ ] Verify CPU hotplug respects MaxSockets limit
+- [ ] Confirm no VM can exceed maximum vCPUs via hotplug
+- [ ] Validate appropriate errors for limit violations
+
+#### **3. Non-Goals (Testing Scope Exclusions)**
+
+| Non-Goal                        | Rationale           | PM/ Lead Agreement |
+| :------------------------------ | :------------------ | :----------------- |
+| CPU hotplug performance testing | Functionality focus | [ ] Name/Date      |
+| Memory hotplug testing          | Different feature   | [ ] Name/Date      |
+| Testing all guest OS types      | Focus on mechanism  | [ ] Name/Date      |
+
+#### **4. Test Strategy**
+
+##### **A. Types of Testing**
+
+| Item (Testing Type)            | Applicable (Y/N or N/A) | Comments                 |
+| :----------------------------- | :---------------------- | :----------------------- |
+| Functional Testing             | Y                       | Core limit functionality |
+| Automation Testing             | Y                       | Must be automated        |
+| Performance Testing            | N/A                     | Not in scope             |
+| Security Testing               | N/A                     | No security changes      |
+| Usability Testing              | N/A                     | No UI changes            |
+| Compatibility Testing          | Y                       | Different guest OS       |
+| Regression Testing             | Y                       | CPU hotplug tests        |
+| Upgrade Testing                | N/A                     | Not upgrade specific     |
+| Backward Compatibility Testing | N/A                     | Safety fix               |
+
+##### **B. Potential Areas to Consider**
+
+| Item                   | Description                       | Applicable (Y/N or N/A) | Comment              |
+| :--------------------- | :-------------------------------- | :---------------------- | :------------------- |
+| **Dependencies**       | libvirt, QEMU CPU hotplug support | Y                       | Backend dependencies |
+| **Monitoring**         | VM CPU metrics                    | Y                       | Track CPU counts     |
+| **Cross Integrations** | VM spec, virt-launcher            | Y                       | Core components      |
+| **UI**                 | CPU editing in console            | Y                       | May show limits      |
+
+#### **5. Test Environment**
+
+| Environment Component                         | Configuration | Specification Examples                        |
+| :-------------------------------------------- | :------------ | :-------------------------------------------- |
+| **Cluster Topology**                          | Required      | Standard cluster                              |
+| **OCP & OpenShift Virtualization Version(s)** | Required      | OCP 4.17+ with OpenShift Virtualization 4.17+ |
+| **CPU Virtualization**                        | Required      | VT-x or AMD-V enabled                         |
+| **Compute Resources**                         | Required      | Nodes with multiple CPUs                      |
+| **Special Hardware**                          | N/A           | None required                                 |
+| **Storage**                                   | Required      | Standard storage                              |
+| **Network**                                   | Required      | OVN-Kubernetes                                |
+| **Required Operators**                        | Required      | OpenShift Virtualization Operator             |
+| **Platform**                                  | Required      | Any supported platform                        |
+| **Special Configurations**                    | Required      | CPU hotplug enabled VM                        |
+
+#### **5.5. Testing Tools & Frameworks**
+
+| Category           | Tools/Frameworks                                 |
+| :----------------- | :----------------------------------------------- |
+| **Test Framework** | Standard OpenShift Virtualization test framework |
+| **CI/CD**          | Standard CI pipeline                             |
+| **Other Tools**    | Guest tools for CPU verification                 |
+
+#### **6. Entry and Exit Criteria**
+
+##### **A. Entry Criteria**
+
+- [x] Requirements and design documents are **approved and merged**
+- [ ] Test environment is **set up and configured**
+- [ ] Test cases are **reviewed and approved**
+- [ ] PR #14511 is merged
+
+##### **B. Exit Criteria**
+
+- [ ] MaxSockets properly limited
+- [ ] Hotplug cannot exceed limits
+- [ ] Error handling correct
+- [ ] Test automation merged
+
+#### **7. Risks and Limitations**
+
+| Risk Category        | Specific Risk for This Feature                | Mitigation Strategy        | Status |
+| :------------------- | :-------------------------------------------- | :------------------------- | :----- |
+| Timeline/Schedule    | Dependent on CPU hotplug feature availability | Verify feature enabled     | [ ]    |
+| Test Coverage        | Various CPU topologies                        | Test common configurations | [ ]    |
+| Test Environment     | Need guest OS supporting CPU hotplug          | Use supported guest OS     | [ ]    |
+| Untestable Aspects   | All possible CPU configurations               | Focus on common cases      | [ ]    |
+| Resource Constraints | Need nodes with sufficient CPUs               | Verify node resources      | [ ]    |
+| Dependencies         | Guest OS hotplug support                      | Use RHEL/Fedora guests     | [ ]    |
+| Other                | N/A                                           | N/A                        | [ ]    |
+
+#### **8. Known Limitations**
+
+- CPU hotplug requires guest OS support
+- Some guest OS may have different behaviors
+- MaxSockets limit applies only to new VMs (existing VMs keep their config)
+
+---
+
+### **III. Test Case Descriptions & Traceability**
+
+#### **1. Requirements-to-Tests Mapping**
+
+| Requirement ID | Requirement Summary      | Test Scenario(s)                         | Test Type(s)       | Priority |
+| :------------- | :----------------------- | :--------------------------------------- | :----------------- | :------- |
+| CNV-61263      | MaxSockets limited       | Verify MaxSockets based on max vCPUs     | Functional, Tier 1 | P0       |
+| CNV-61263      | Hotplug blocked at limit | Attempt hotplug beyond limit             | Functional, Tier 1 | P0       |
+| CNV-61263      | Error handling           | Verify error message when limit exceeded | Functional, Tier 1 | P1       |
+
+#### **Test Scenarios - Tier 1 (Functional)**
+
+**Scenario 1: MaxSockets Calculation**
+
+- **Preconditions:** VM with CPU hotplug enabled
+- **Steps:**
+  1. Create VM with specific max vCPUs
+  2. Check calculated MaxSockets
+  3. Verify MaxSockets <= max vCPUs
+- **Expected Result:** MaxSockets properly limited
+- **Priority:** P0
+
+**Scenario 2: Hotplug at Limit**
+
+- **Preconditions:** VM running near max vCPUs
+- **Steps:**
+  1. Start VM with CPUs near limit
+  2. Attempt to hotplug additional CPU
+  3. Verify operation blocked or limited
+- **Expected Result:** Cannot exceed max vCPUs
+- **Priority:** P0
+
+**Scenario 3: Error Message for Limit**
+
+- **Preconditions:** VM at max vCPUs
+- **Steps:**
+  1. Attempt to add more CPUs
+  2. Check error message
+- **Expected Result:** Clear error about limit
+- **Priority:** P1
+
+#### **Test Scenarios - Tier 2 (E2E)**
+
+**Scenario 4: Full Hotplug Cycle**
+
+- **Preconditions:** VM with hotplug enabled
+- **Steps:**
+  1. Start VM with 2 vCPUs
+  2. Hotplug to max allowed
+  3. Verify guest sees all CPUs
+  4. Verify no further hotplug allowed
+- **Expected Result:** Full cycle works within limits
+- **Priority:** P1
+
+---
+
+### **IV. Sign-off and Approval**
+
+This Software Test Plan requires approval from the following stakeholders:
+
+- **Reviewers:**
+  - [QE Team Lead]
+  - [Compute SIG Representative]
+- **Approvers:**
+  - [QE Manager]
+  - [Product Owner]

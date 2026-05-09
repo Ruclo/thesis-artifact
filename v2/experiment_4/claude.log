@@ -1,0 +1,37 @@
+Perfect! Now let me provide a final summary back to the orchestrator:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Pyright Healing Complete ✓
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**File:** `tests/virt/cluster/vm_snapshot_restore/test_snapshot_restore_run_strategy.py`
+
+**Iterations:** 2
+
+**Fixes Applied:**
+
+**Iteration 1:**
+- **Error:** No parameter named "storage_class" in VirtualMachineForTests
+- **Root Cause:** VirtualMachineForTests doesn't accept storage_class directly
+- **Fix:** Created DataVolume with storage_class, then passed via data_volume_template
+- **Changes:**
+  - Added imports: DataVolume, get_http_image_url, get_artifactory_config_map, get_artifactory_secret
+  - Created DataVolume fixture setup with proper storage class configuration
+  - Passed DV metadata/spec via data_volume_template parameter
+
+**Iteration 2:**
+- **Error:** Argument of type "dict[str, Any]" cannot be assigned to parameter "os_flavor" (RHEL_LATEST is dict)
+- **Root Cause:** Used RHEL_LATEST (dict) instead of OS_FLAVOR_RHEL (str)
+- **Fix:** Changed to use OS_FLAVOR_RHEL constant
+- **Changes:**
+  - Removed import of RHEL_LATEST from tests.os_params
+  - Added OS_FLAVOR_RHEL to utilities.constants imports
+  - Updated os_flavor parameter to use OS_FLAVOR_RHEL
+
+**Final Status:** ✅ 0 errors, 0 warnings, 0 informations
+
+**Exit Code:** 0 (success)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The test file is now type-safe and ready for execution!

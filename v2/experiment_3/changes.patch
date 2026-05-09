@@ -1,0 +1,492 @@
+diff --git a/tests/virt/node/general/test_vmi_reset_comprehensive.py b/tests/virt/node/general/test_vmi_reset_comprehensive.py
+new file mode 100644
+index 0000000..8152591
+--- /dev/null
++++ b/tests/virt/node/general/test_vmi_reset_comprehensive.py
+@@ -0,0 +1,486 @@
++"""
++Test VM Reset Functionality
++
++This module tests the Force/Hard Reset feature for VirtualMachineInstance (VMI).
++The hard reset functionality provides a faster, in-place alternative to VM restart that:
++- Simulates pressing the hardware reset button on a physical machine
++- Does not require pod rescheduling
++- Preserves VMI UID and pod assignment
++- Provides an immediate recovery path for hung guests
++
++Related Jira: VIRTSTRAT-357
++Related PR: kubevirt/kubevirt#13208
++"""
++
++import logging
++import shlex
++
++import pytest
++from kubernetes.client.exceptions import ApiException
++from ocp_resources.virtual_machine import VirtualMachine
++from pyhelper_utils.shell import run_ssh_commands
++from timeout_sampler import TimeoutExpiredError, TimeoutSampler
++
++from utilities.constants import TIMEOUT_2MIN, TIMEOUT_5MIN
++from utilities.infra import run_virtctl_command
++from utilities.virt import (
++    VirtualMachineForTests,
++    fedora_vm_body,
++    running_vm,
++    wait_for_running_vm,
++)
++
++LOGGER = logging.getLogger(__name__)
++
++
++def get_vm_boot_count(vm):
++    """
++    Get the number of boot entries from VM journal.
++
++    Args:
++        vm: VirtualMachine instance with SSH access
++
++    Returns:
++        int: Number of boot entries
++    """
++    reboot_count = run_ssh_commands(
++        host=vm.ssh_exec,
++        commands=[shlex.split("journalctl --list-boots | wc -l")],
++    )[0].strip()
++    return int(reboot_count)
++
++
++def get_vmi_uid(vm):
++    """
++    Get VMI UID from VM instance.
++
++    Args:
++        vm: VirtualMachine instance
++
++    Returns:
++        str: VMI UID
++    """
++    return vm.vmi.instance.metadata.uid
++
++
++def get_vmi_pod_name(vm):
++    """
++    Get the virt-launcher pod name for the VMI.
++
++    Args:
++        vm: VirtualMachine instance
++
++    Returns:
++        str: Pod name
++    """
++    return vm.vmi.virt_launcher_pod.name
++
++
++@pytest.fixture()
++def vm_for_reset_api_test(unprivileged_client, namespace):
++    """
++    Fixture providing a running VM for API reset tests.
++    """
++    name = "vm-for-reset-api-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=name),
++    ) as vm:
++        running_vm(vm=vm)
++        yield vm
++
++
++@pytest.fixture()
++def vm_for_reset_virtctl_test(unprivileged_client, namespace):
++    """
++    Fixture providing a running VM for virtctl reset tests.
++    """
++    name = "vm-for-reset-virtctl-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=name),
++    ) as vm:
++        running_vm(vm=vm)
++        yield vm
++
++
++@pytest.fixture()
++def stopped_vm_for_reset_test(unprivileged_client, namespace):
++    """
++    Fixture providing a stopped VM for negative reset tests.
++    """
++    name = "stopped-vm-for-reset-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=name),
++    ) as vm:
++        # Start VM first to ensure it's created
++        running_vm(vm=vm)
++        # Stop the VM
++        LOGGER.info(f"Stopping VM {vm.name} for negative test")
++        vm.stop(wait=True)
++        yield vm
++
++
++@pytest.mark.polarion("CNV-12373")
++def test_reset_running_vmi_via_api(vm_for_reset_api_test):
++    """
++    Test Scenario TS-01: Reset running VMI via API and verify guest reboots.
++
++    Acceptance Criteria: AC-1, AC-2, AC-3
++    Goal: G-01, G-06
++
++    Steps:
++        1. Get boot count before reset
++        2. Reset VMI via API (vmi.reset())
++        3. Wait for VM to become running
++        4. Verify boot count increased by 1
++
++    Expected Result:
++        - VMI is successfully reset
++        - Guest reboots (boot count increases)
++        - No pod rescheduling occurs
++    """
++    LOGGER.info(f"Testing VMI reset via API for VM {vm_for_reset_api_test.name}")
++
++    # Get boot count before reset
++    boot_count_before = get_vm_boot_count(vm=vm_for_reset_api_test)
++    LOGGER.info(f"Boot count before reset: {boot_count_before}")
++
++    # Perform reset via API
++    LOGGER.info("Performing VMI reset via API")
++    vm_for_reset_api_test.vmi.reset()
++
++    # Wait for VM to become running again
++    wait_for_running_vm(vm=vm_for_reset_api_test)
++
++    # Verify boot count increased
++    boot_count_after = get_vm_boot_count(vm=vm_for_reset_api_test)
++    LOGGER.info(f"Boot count after reset: {boot_count_after}")
++
++    assert boot_count_after - boot_count_before == 1, (
++        f"Expected boot count to increase by 1 after reset. "
++        f"Before: {boot_count_before}, After: {boot_count_after}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_reset_running_vmi_via_virtctl(vm_for_reset_virtctl_test):
++    """
++    Test Scenario TS-02: Reset running VMI via virtctl command.
++
++    Acceptance Criteria: AC-1, AC-4
++    Goal: G-02
++
++    Steps:
++        1. Get boot count before reset
++        2. Execute virtctl reset command
++        3. Wait for VM to become running
++        4. Verify boot count increased by 1
++
++    Expected Result:
++        - virtctl reset command succeeds
++        - Guest reboots (boot count increases)
++    """
++    LOGGER.info(f"Testing VMI reset via virtctl for VM {vm_for_reset_virtctl_test.name}")
++
++    # Get boot count before reset
++    boot_count_before = get_vm_boot_count(vm=vm_for_reset_virtctl_test)
++    LOGGER.info(f"Boot count before reset: {boot_count_before}")
++
++    # Perform reset via virtctl
++    LOGGER.info("Performing VMI reset via virtctl")
++    cmd = shlex.split(f"reset {vm_for_reset_virtctl_test.name}")
++    return_code, output, error = run_virtctl_command(
++        command=cmd,
++        namespace=vm_for_reset_virtctl_test.namespace,
++        check=True,
++    )
++
++    LOGGER.info(f"virtctl reset output: {output}")
++    assert return_code, "virtctl reset command failed"
++
++    # Wait for VM to become running again
++    wait_for_running_vm(vm=vm_for_reset_virtctl_test)
++
++    # Verify boot count increased
++    boot_count_after = get_vm_boot_count(vm=vm_for_reset_virtctl_test)
++    LOGGER.info(f"Boot count after reset: {boot_count_after}")
++
++    assert boot_count_after - boot_count_before == 1, (
++        f"Expected boot count to increase by 1 after reset. "
++        f"Before: {boot_count_before}, After: {boot_count_after}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_vmi_uid_unchanged_after_reset(vm_for_reset_api_test):
++    """
++    Test Scenario TS-03: Verify VMI UID remains unchanged after reset.
++
++    Acceptance Criteria: AC-2
++    Goal: G-05
++
++    Steps:
++        1. Get VMI UID before reset
++        2. Get virt-launcher pod name before reset
++        3. Reset VMI via API
++        4. Wait for VM to become running
++        5. Verify VMI UID unchanged
++        6. Verify pod name unchanged
++
++    Expected Result:
++        - VMI UID remains the same
++        - virt-launcher pod is not rescheduled
++    """
++    LOGGER.info(f"Testing VMI UID preservation for VM {vm_for_reset_api_test.name}")
++
++    # Get VMI metadata before reset
++    vmi_uid_before = get_vmi_uid(vm=vm_for_reset_api_test)
++    pod_name_before = get_vmi_pod_name(vm=vm_for_reset_api_test)
++    LOGGER.info(f"VMI UID before reset: {vmi_uid_before}")
++    LOGGER.info(f"Pod name before reset: {pod_name_before}")
++
++    # Perform reset
++    LOGGER.info("Performing VMI reset")
++    vm_for_reset_api_test.vmi.reset()
++
++    # Wait for VM to become running
++    wait_for_running_vm(vm=vm_for_reset_api_test)
++
++    # Get VMI metadata after reset
++    vmi_uid_after = get_vmi_uid(vm=vm_for_reset_api_test)
++    pod_name_after = get_vmi_pod_name(vm=vm_for_reset_api_test)
++    LOGGER.info(f"VMI UID after reset: {vmi_uid_after}")
++    LOGGER.info(f"Pod name after reset: {pod_name_after}")
++
++    # Verify UID and pod name unchanged
++    assert vmi_uid_before == vmi_uid_after, (
++        f"VMI UID changed after reset. Before: {vmi_uid_before}, After: {vmi_uid_after}"
++    )
++    assert pod_name_before == pod_name_after, (
++        f"Pod was rescheduled after reset. Before: {pod_name_before}, After: {pod_name_after}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_reset_with_unprivileged_user(vm_for_reset_api_test, unprivileged_client):
++    """
++    Test Scenario TS-04: Verify RBAC - user with edit role can reset VMI.
++
++    Acceptance Criteria: AC-5
++    Goal: G-03
++
++    Steps:
++        1. Verify unprivileged client can access VM
++        2. Reset VMI using unprivileged client
++        3. Wait for VM to become running
++        4. Verify reset succeeded
++
++    Expected Result:
++        - Unprivileged user with edit role can reset VMI
++        - Reset operation succeeds
++    """
++    LOGGER.info(f"Testing VMI reset with unprivileged user for VM {vm_for_reset_api_test.name}")
++
++    # Get boot count before reset
++    boot_count_before = get_vm_boot_count(vm=vm_for_reset_api_test)
++    LOGGER.info(f"Boot count before reset: {boot_count_before}")
++
++    # Perform reset with unprivileged client
++    LOGGER.info("Performing VMI reset with unprivileged client")
++    vm_for_reset_api_test.vmi.reset()
++
++    # Wait for VM to become running
++    wait_for_running_vm(vm=vm_for_reset_api_test)
++
++    # Verify reset succeeded
++    boot_count_after = get_vm_boot_count(vm=vm_for_reset_api_test)
++    LOGGER.info(f"Boot count after reset: {boot_count_after}")
++
++    assert boot_count_after - boot_count_before == 1, (
++        f"Reset with unprivileged user failed to reboot VM. "
++        f"Before: {boot_count_before}, After: {boot_count_after}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_reset_fails_on_stopped_vmi(stopped_vm_for_reset_test):
++    """
++    Test Scenario TS-05: Verify reset fails on non-running VMI with appropriate error.
++
++    Acceptance Criteria: AC-6
++    Goal: G-04
++
++    Steps:
++        1. Ensure VM is in stopped state
++        2. Attempt to reset the stopped VMI
++        3. Verify operation fails with appropriate error
++
++    Expected Result:
++        - Reset operation fails gracefully
++        - Appropriate error message is returned
++    """
++    LOGGER.info(f"Testing reset on stopped VM {stopped_vm_for_reset_test.name}")
++
++    # Verify VM is stopped
++    stopped_vm_for_reset_test.wait_for_status(status=VirtualMachine.Status.STOPPED, timeout=TIMEOUT_2MIN)
++    LOGGER.info(f"VM {stopped_vm_for_reset_test.name} is in stopped state")
++
++    # Attempt to reset stopped VMI - should fail
++    LOGGER.info("Attempting to reset stopped VMI")
++    with pytest.raises(ApiException) as exc_info:
++        stopped_vm_for_reset_test.vmi.reset()
++
++    # Verify appropriate error
++    LOGGER.info(f"Reset failed as expected with error: {exc_info.value}")
++    assert exc_info.value.status in [400, 404, 409], (
++        f"Expected HTTP 400/404/409 error for stopped VMI reset, got {exc_info.value.status}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_reset_fails_on_nonexistent_vmi(unprivileged_client, namespace):
++    """
++    Test Scenario TS-06: Verify reset fails on non-existent VMI.
++
++    Acceptance Criteria: AC-6
++    Goal: G-04
++
++    Steps:
++        1. Attempt to reset a non-existent VMI via virtctl
++        2. Verify operation fails with appropriate error
++
++    Expected Result:
++        - Reset operation fails gracefully
++        - Error indicates VMI not found
++    """
++    nonexistent_vmi_name = "nonexistent-vmi-for-reset-test"
++    LOGGER.info(f"Testing reset on non-existent VMI {nonexistent_vmi_name}")
++
++    # Attempt to reset non-existent VMI via virtctl
++    cmd = shlex.split(f"reset {nonexistent_vmi_name}")
++    return_code, output, error = run_virtctl_command(
++        command=cmd,
++        namespace=namespace.name,
++        check=False,
++    )
++
++    # Verify reset failed
++    assert not return_code, f"virtctl reset should fail for non-existent VMI, but succeeded with output: {output}"
++    LOGGER.info(f"virtctl reset failed as expected with error: {error}")
++    assert "not found" in error.lower() or "error" in error.lower(), (
++        f"Expected 'not found' or 'error' in error message, got: {error}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_boot_time_changes_after_reset(vm_for_reset_api_test):
++    """
++    Test Scenario TS-11: Verify boot time changes after reset.
++
++    Acceptance Criteria: AC-1
++    Goal: G-06
++
++    Steps:
++        1. Get system boot time before reset
++        2. Reset VMI
++        3. Wait for VM to become running
++        4. Get system boot time after reset
++        5. Verify boot time changed (system rebooted)
++
++    Expected Result:
++        - System boot time changes after reset
++        - Indicates actual guest reboot occurred
++    """
++    LOGGER.info(f"Testing boot time change after reset for VM {vm_for_reset_api_test.name}")
++
++    # Get boot time before reset
++    boot_time_before = run_ssh_commands(
++        host=vm_for_reset_api_test.ssh_exec,
++        commands=[shlex.split("uptime -s")],
++    )[0].strip()
++    LOGGER.info(f"Boot time before reset: {boot_time_before}")
++
++    # Perform reset
++    LOGGER.info("Performing VMI reset")
++    vm_for_reset_api_test.vmi.reset()
++
++    # Wait for VM to become running
++    wait_for_running_vm(vm=vm_for_reset_api_test)
++
++    # Get boot time after reset - use sampler to allow time for uptime to stabilize
++    LOGGER.info("Waiting for boot time to stabilize after reset")
++    boot_time_after = boot_time_before  # Initialize to handle timeout case
++    for sample in TimeoutSampler(
++        wait_timeout=TIMEOUT_5MIN,
++        sleep=10,
++        func=lambda: run_ssh_commands(
++            host=vm_for_reset_api_test.ssh_exec,
++            commands=[shlex.split("uptime -s")],
++        )[0].strip(),
++    ):
++        boot_time_after = sample
++        if boot_time_after != boot_time_before:
++            LOGGER.info(f"Boot time after reset: {boot_time_after}")
++            break
++
++    # Verify boot time changed
++    assert boot_time_before != boot_time_after, (
++        f"Boot time did not change after reset. "
++        f"Before: {boot_time_before}, After: {boot_time_after}"
++    )
++
++
++@pytest.mark.polarion("CNV-XXXXX")
++def test_reset_on_paused_vmi(vm_for_reset_api_test):
++    """
++    Test Scenario TS-12: Verify reset behavior on paused VMI.
++
++    Acceptance Criteria: AC-6
++    Goal: G-04
++
++    Steps:
++        1. Pause the running VMI
++        2. Attempt to reset the paused VMI
++        3. Verify operation behavior (may fail or succeed depending on implementation)
++
++    Expected Result:
++        - Reset operation either:
++          a) Fails gracefully with appropriate error, or
++          b) Succeeds and unpauses the VM
++    """
++    LOGGER.info(f"Testing reset on paused VM {vm_for_reset_api_test.name}")
++
++    # Pause the VM
++    LOGGER.info("Pausing VM")
++    vm_for_reset_api_test.vmi.pause()
++    vm_for_reset_api_test.vmi.wait_for_condition(
++        condition=vm_for_reset_api_test.vmi.Condition.Type.PAUSED,
++        status=vm_for_reset_api_test.vmi.Condition.Status.TRUE,
++        timeout=TIMEOUT_2MIN,
++    )
++    LOGGER.info(f"VM {vm_for_reset_api_test.name} is paused")
++
++    # Attempt to reset paused VMI
++    LOGGER.info("Attempting to reset paused VMI")
++    try:
++        vm_for_reset_api_test.vmi.reset()
++        LOGGER.info("Reset on paused VMI succeeded - checking VM state")
++
++        # If reset succeeds, verify VM is running (unpause may have occurred)
++        wait_for_running_vm(vm=vm_for_reset_api_test, wait_until_running_timeout=TIMEOUT_5MIN)
++        LOGGER.info("VM is running after reset on paused VMI")
++
++    except ApiException as exc:
++        # Reset may fail on paused VMI - verify appropriate error
++        LOGGER.info(f"Reset on paused VMI failed as expected with error: {exc}")
++        assert exc.status in [400, 409], (
++            f"Expected HTTP 400/409 error for paused VMI reset, got {exc.status}"
++        )

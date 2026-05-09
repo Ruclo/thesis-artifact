@@ -1,0 +1,90 @@
+/home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+  self.headers = http_resp.getheaders()
+/home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+  self.headers = http_resp.getheaders()
+2026-02-23T13:48:49.353136 ocp_resources Namespace [32mINFO[0m Create Namespace cnv-tests-run-in-progress-ns[0m
+2026-02-23T13:48:49.353495 ocp_resources Namespace [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'cnv-tests-run-in-progress-ns'}, 'spec': {}}[0m
+2026-02-23T13:48:49.676079 ocp_resources Namespace [32mINFO[0m Wait until Namespace cnv-tests-run-in-progress-ns is created[0m
+2026-02-23T13:48:49.832719 ocp_resources Namespace [32mINFO[0m Wait for Namespace cnv-tests-run-in-progress-ns status to be Active[0m
+2026-02-23T13:48:49.988286 ocp_resources Namespace [32mINFO[0m Status of Namespace cnv-tests-run-in-progress-ns is Active[0m
+2026-02-23T13:48:49.988940 ocp_resources Namespace [32mINFO[0m Update Namespace cnv-tests-run-in-progress-ns:
+{'metadata': {'labels': {'pod-security.kubernetes.io/enforce': 'privileged', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}, 'name': 'cnv-tests-run-in-progress-ns'}}[0m
+2026-02-23T13:48:50.150171 ocp_resources ConfigMap [32mINFO[0m Create ConfigMap cnv-tests-run-in-progress[0m
+2026-02-23T13:48:50.150558 ocp_resources ConfigMap [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {'name': 'cnv-tests-run-in-progress', 'namespace': 'cnv-tests-run-in-progress-ns'}, 'data': '*******'}[0m
+2026-02-23T13:48:50.475338 ocp_resources ConfigMap [32mINFO[0m Wait until ConfigMap cnv-tests-run-in-progress is created[0m
+============================= test session starts ==============================
+platform linux -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/fedora/thesis/openshift-virtualization-tests
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.12.1, benchmark-5.2.3, html-4.1.1, order-1.3.0, testconfig-0.2.0, metadata-3.1.1, mock-3.15.1, repeat-0.9.4, progress-1.4.0, dependency-0.6.0, jira-0.3.22
+collected 6 items
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py 2026-02-23T13:54:37.293097 tests.storage.snapshots.test_storage_profile_snapshot_class [32mINFO[0m VMSnapshot 'snapshot-vm-snapshot-class-test-1771854755-0644374' is ready[0m
+2026-02-23T13:54:37.613744 tests.storage.snapshots.test_storage_profile_snapshot_class [32mINFO[0m VolumeSnapshot 'vmsnapshot-de6a6c3e-a0f1-4163-90cd-2f69cd5e5dd8-volume-dv-disk' uses VolumeSnapshotClass 'ocs-storagecluster-rbdplugin-snapclass'[0m
+
+TEST: TestStorageProfileSnapshotClassHonored.test_vm_snapshot_uses_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#] STATUS: [0;32mPASSED[0m
+.
+_ 1 of 6 completed, 1 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py 2026-02-23T13:56:41.904073 tests.storage.snapshots.test_storage_profile_snapshot_class [32mINFO[0m VMSnapshot 'snapshot-vm-snapshot-class-test-1771854879-690498' is ready[0m
+
+TEST: TestStorageProfileSnapshotClassHonored.test_vm_restore_succeeds_with_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#] STATUS: [0;32mPASSED[0m
+.
+_ 2 of 6 completed, 2 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py 2026-02-23T14:00:51.657947 tests.storage.snapshots.test_storage_profile_snapshot_class [32mINFO[0m VMSnapshot 'snapshot-vm-snapshot-class-test-1771855097-6620758' is ready[0m
+
+TEST: TestStorageProfileSnapshotClassFallback.test_vm_snapshot_falls_back_to_default_selection[#ocs-storagecluster-ceph-rbd-virtualization#] STATUS: [0;32mPASSED[0m
+.
+_ 3 of 6 completed, 3 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py .
+_ 4 of 6 completed, 4 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py .
+_ 5 of 6 completed, 5 Pass, 0 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/deprecated_api/test_deprecation_audit_logs.py 
+TEST: test_deprecated_apis_in_audit_logs STATUS: [1;33mQUARANTINED[0m
+[NOTRUN] quarantined: Timeout after 180s retrieving logs Tracked <a href='https://issues.redhat.com/browse/CNV-76514' target='_blank'>CNV-76514</a>
+_ 6 of 6 completed, 5 Pass, 0 Fail, 0 Skip, 0 XPass, 1 XFail, 0 Error, 0 ReRun _
+                                                                         [100%]2026-02-23T14:14:24.243951 ocp_resources ConfigMap [32mINFO[0m Delete ConfigMap cnv-tests-run-in-progress[0m
+2026-02-23T14:14:24.557507 ocp_resources ConfigMap [32mINFO[0m Deleting {'kind': 'ConfigMap', 'apiVersion': 'v1', 'metadata': {'name': 'cnv-tests-run-in-progress', 'namespace': 'cnv-tests-run-in-progress-ns', 'uid': '175eaf5c-ff9f-45a6-99c7-fa9bac1928d5', 'resourceVersion': '23365336', 'creationTimestamp': '2026-02-23T13:48:50Z', 'managedFields': [{'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-02-23T13:48:50Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:data': {'.': {}, 'f:host': {}, 'f:pytest_cmd': {}, 'f:run-in-container': {}, 'f:running_from_dir': {}, 'f:session-id': {}, 'f:user': {}}}}]}, 'data': '*******'}[0m
+2026-02-23T14:14:24.724757 ocp_resources ConfigMap [32mINFO[0m Wait until ConfigMap cnv-tests-run-in-progress is deleted[0m
+2026-02-23T14:14:25.041668 ocp_resources Namespace [32mINFO[0m Delete Namespace cnv-tests-run-in-progress-ns[0m
+2026-02-23T14:14:25.353624 ocp_resources Namespace [32mINFO[0m Deleting {'kind': 'Namespace', 'apiVersion': 'v1', 'metadata': {'name': 'cnv-tests-run-in-progress-ns', 'uid': 'b69d729f-493e-40c7-9e47-0ab8110ef77f', 'resourceVersion': '23365335', 'creationTimestamp': '2026-02-23T13:48:49Z', 'labels': {'kubernetes.io/metadata.name': 'cnv-tests-run-in-progress-ns', 'pod-security.kubernetes.io/audit': 'restricted', 'pod-security.kubernetes.io/audit-version': 'latest', 'pod-security.kubernetes.io/enforce': 'privileged', 'pod-security.kubernetes.io/warn': 'restricted', 'pod-security.kubernetes.io/warn-version': 'latest', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}, 'annotations': {'openshift.io/sa.scc.mcs': 's0:c31,c20', 'openshift.io/sa.scc.supplemental-groups': '1000970000/10000', 'openshift.io/sa.scc.uid-range': '1000970000/10000', 'security.openshift.io/MinimallySufficientPodSecurityStandard': 'restricted'}, 'managedFields': [{'manager': 'cluster-policy-controller', 'operation': 'Apply', 'apiVersion': 'v1', 'time': '2026-02-23T13:48:49Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'f:openshift.io/sa.scc.mcs': {}, 'f:openshift.io/sa.scc.supplemental-groups': {}, 'f:openshift.io/sa.scc.uid-range': {}}}}}, {'manager': 'pod-security-admission-label-synchronization-controller', 'operation': 'Apply', 'apiVersion': 'v1', 'time': '2026-02-23T13:48:49Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:annotations': {'f:security.openshift.io/MinimallySufficientPodSecurityStandard': {}}, 'f:labels': {'f:pod-security.kubernetes.io/audit': {}, 'f:pod-security.kubernetes.io/audit-version': {}, 'f:pod-security.kubernetes.io/warn': {}, 'f:pod-security.kubernetes.io/warn-version': {}}}}}, {'manager': 'OpenAPI-Generator', 'operation': 'Update', 'apiVersion': 'v1', 'time': '2026-02-23T13:48:50Z', 'fieldsType': 'FieldsV1', 'fieldsV1': {'f:metadata': {'f:labels': {'.': {}, 'f:kubernetes.io/metadata.name': {}, 'f:pod-security.kubernetes.io/enforce': {}, 'f:security.openshift.io/scc.podSecurityLabelSync': {}}}}}]}, 'spec': {'finalizers': ['kubernetes']}, 'status': {'phase': 'Active'}}[0m
+2026-02-23T14:14:25.520927 ocp_resources Namespace [32mINFO[0m Wait until Namespace cnv-tests-run-in-progress-ns is deleted[0m
+2026-02-23T14:14:24.725254 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)[0m
+2026-02-23T14:14:24.885283 timeout_sampler [32mINFO[0m Elapsed time: 0.0003380775451660156 [0:00:00.000338][0m
+2026-02-23T14:14:25.521306 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_deleted.lambda: self.exists)[0m
+2026-02-23T14:14:33.771081 timeout_sampler [32mINFO[0m Elapsed time: 8.090161561965942 [0:00:08.090162][0m
+========== 5 passed, 51 warnings, 1 quarantined in 1543.12s (0:25:43) ==========
+
+=============================== warnings summary ===============================
+tests/storage/snapshots/test_storage_profile_snapshot_class.py: 35 warnings
+tests/deprecated_api/test_deprecation_audit_logs.py: 4 warnings
+.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: 2 warnings
+  /home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+    self.headers = http_resp.getheaders()
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassHonored::test_vm_snapshot_uses_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassHonored::test_vm_snapshot_uses_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassHonored::test_vm_snapshot_uses_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassHonored::test_vm_restore_succeeds_with_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassFallback::test_vm_snapshot_falls_back_to_default_selection[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestSnapshotRestoreCycleWithStorageProfileSnapshotClass::test_pre_snapshot_file_preserved_after_restore[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestSnapshotRestoreCycleWithStorageProfileSnapshotClass::test_post_snapshot_file_removed_after_restore[#ocs-storagecluster-ceph-rbd-virtualization#]
+  /home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/ocp_resources/resource.py:1612: FutureWarning: 'client' arg will be mandatory in the next major release. `config_file` and `context` args will be removed.
+    super().__init__(
+
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassHonored::test_vm_snapshot_uses_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassHonored::test_vm_restore_succeeds_with_storage_profile_snapshot_class[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestStorageProfileSnapshotClassFallback::test_vm_snapshot_falls_back_to_default_selection[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestSnapshotRestoreCycleWithStorageProfileSnapshotClass::test_pre_snapshot_file_preserved_after_restore[#ocs-storagecluster-ceph-rbd-virtualization#]
+tests/storage/snapshots/test_storage_profile_snapshot_class.py::TestSnapshotRestoreCycleWithStorageProfileSnapshotClass::test_post_snapshot_file_removed_after_restore[#ocs-storagecluster-ceph-rbd-virtualization#]
+  /home/fedora/thesis/openshift-virtualization-tests/.venv/lib64/python3.14/site-packages/ocp_resources/storage_profile.py:13: FutureWarning: 'client' arg will be mandatory in the next major release. `config_file` and `context` args will be removed.
+    super().__init__(**kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========== 5 passed, 53 warnings, 1 quarantined in 1543.13s (0:25:43) ==========

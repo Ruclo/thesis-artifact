@@ -1,0 +1,46 @@
+● I'll read the file you specified.                                                                                                                
+                                                                                                                                                   
+● Read 1 file (ctrl+o to expand)                                                                                                                   
+                                                                                                                                                   
+● I'll help you implement this test plan for VM snapshot restore with runStrategy RerunOnFailure. Let me start with the Context Exploration phase  
+  to understand the existing testing architecture.                                                                                                 
+                                                                                                                                                   
+  Step 1: Context Exploration                                                                                                                      
+                                                                                                                                                   
+  Let me explore the project structure to understand the testing conventions and available utilities.                                              
+                                                                                                                                                   
+● Explore(Explore testing architecture)                                                                                                            
+  ⎿  Done (45 tool uses · 88.8k tokens · 4m 57s)                                                                                                   
+                                                                                                                                                   
+● Excellent! I now have a comprehensive understanding of the testing architecture. Let me proceed to Step 2: Code Generation.                      
+                                                                                                                                                   
+  Let me first check the existing snapshot test directory structure.                                                                               
+                                                                                                                                                   
+● Read 1 file (ctrl+o to expand)                                                                                                                   
+                                                                                                                                                   
+● Now let me check the existing snapshot test patterns to ensure consistency.                                                                      
+                                                                                                                                                   
+● Read 2 files (ctrl+o to expand)                                                                                                                  
+                                                                                                                                                   
+● Now I'll create the comprehensive test implementation for the snapshot restore run strategy scenarios.                                           
+                                                                                                                                                   
+● Write(tests/storage/snapshots/test_snapshot_restore_run_strategy.py)                                                                             
+  ⎿  Wrote 713 lines to tests/storage/snapshots/test_snapshot_restore_run_strategy.py                                                              
+     # -*- coding: utf-8 -*-                                                                                                                       
+                                                                                                                                                   
+     """                                                                                                                                           
+     VM Snapshot Restore with runStrategy Tests                                                                                                    
+                                                                                                                                                   
+     Tests for CNV-63819: VM snapshot restore stuck with runStrategy RerunOnFailure                                                                
+     Validates snapshot restore functionality across different VM run strategies.                                                                  
+     """                                                                                                                                           
+                                                                                                                                                   
+     import logging                                                                                                                                
+     … +703 lines (ctrl+o to expand)                                                                                                               
+                                                                                                                                                   
+● Perfect! Now let me verify the implementation has correct Python syntax.                                                                         
+                                                                                                                                                   
+● Bash(python3 -m py_compile tests/storage/snapshots/test_snapshot_restore_run_strategy.py)                                                        
+  ⎿  (No content)                                                                                                                                  
+                                                                                                                                                   
+● Excellent!

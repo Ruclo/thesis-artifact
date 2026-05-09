@@ -1,0 +1,702 @@
+diff --git a/tests/virt/node/general/conftest.py b/tests/virt/node/general/conftest.py
+new file mode 100644
+index 0000000..a303d07
+--- /dev/null
++++ b/tests/virt/node/general/conftest.py
+@@ -0,0 +1,77 @@
++import logging
++
++import pytest
++from ocp_resources.cluster_role import ClusterRole
++from ocp_resources.role_binding import RoleBinding
++
++from utilities.constants import UNPRIVILEGED_USER
++from utilities.virt import VirtualMachineForTests, fedora_vm_body, running_vm
++
++LOGGER = logging.getLogger(__name__)
++
++
++@pytest.fixture(scope="session")
++def kubevirt_reset_cluster_role(admin_client):
++    """Get the kubevirt.io:edit ClusterRole which includes VMI reset permissions."""
++    return ClusterRole(name="kubevirt.io:edit", client=admin_client, ensure_exists=True)
++
++
++@pytest.fixture()
++def unprivileged_user_reset_rolebinding(admin_client, namespace, kubevirt_reset_cluster_role):
++    """Create RoleBinding to grant VMI reset permissions to unprivileged user."""
++    with RoleBinding(
++        name="role-bind-kubevirt-reset",
++        namespace=namespace.name,
++        client=admin_client,
++        subjects_kind="User",
++        subjects_name=UNPRIVILEGED_USER,
++        subjects_namespace=namespace.name,
++        role_ref_kind=kubevirt_reset_cluster_role.kind,
++        role_ref_name=kubevirt_reset_cluster_role.name,
++    ) as role_binding:
++        yield role_binding
++
++
++@pytest.fixture()
++def stopped_vm_for_test(namespace, unprivileged_client):
++    """Fixture for a stopped VM (no VMI running)."""
++    vm_name = "stopped-vm-for-reset-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=vm_name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=vm_name),
++    ) as vm:
++        # Create VM but don't start it (no VMI)
++        yield vm
++
++
++@pytest.fixture()
++def paused_vm_for_test(namespace, unprivileged_client):
++    """Fixture for a paused VM."""
++    vm_name = "paused-vm-for-reset-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=vm_name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=vm_name),
++    ) as vm:
++        # Start the VM first
++        running_vm(vm=vm)
++        # Then pause it
++        vm.privileged_vmi.pause(wait=True)
++        yield vm
++
++
++@pytest.fixture()
++def unprivileged_user_vm_for_reset(unprivileged_client, namespace):
++    """VM for unprivileged user RBAC testing."""
++    name = "namespace-admin-vm-reset"
++    with VirtualMachineForTests(
++        name=name,
++        client=unprivileged_client,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=name),
++    ) as vm:
++        running_vm(vm=vm)
++        yield vm
+diff --git a/tests/virt/node/general/test_vmi_reset.py b/tests/virt/node/general/test_vmi_reset.py
+index a8a3656..fe61853 100644
+--- a/tests/virt/node/general/test_vmi_reset.py
++++ b/tests/virt/node/general/test_vmi_reset.py
+@@ -1,15 +1,36 @@
++"""
++Test Suite for VMI Force/Hard Reset Functionality
++
++Test Plan: VIRTSTRAT-357 - GA: Force/hard reset
++GitHub PR: kubevirt/kubevirt#13208
++
++This test suite validates the VMI reset functionality, which provides a hardware-level
++reset for VirtualMachineInstance objects without requiring pod rescheduling.
++"""
+ import logging
+ import shlex
+ 
+ import pytest
++from kubernetes.dynamic.exceptions import ForbiddenError, NotFoundError
++from ocp_resources.virtual_machine_instance import VirtualMachineInstance
+ from pyhelper_utils.shell import run_ssh_commands
+ 
++from utilities.infra import run_virtctl_command
+ from utilities.virt import wait_for_running_vm
+ 
+ LOGGER = logging.getLogger(__name__)
+ 
+ 
+ def get_vm_boot_count(vm):
++    """
++    Get the number of times a VM has booted by checking journalctl boot entries.
++
++    Args:
++        vm: VirtualMachineForTests instance with SSH access
++
++    Returns:
++        int: Number of boot entries in the journal
++    """
+     reboot_count = run_ssh_commands(
+         host=vm.ssh_exec,
+         commands=[shlex.split("journalctl --list-boots | wc -l")],
+@@ -20,17 +41,27 @@ def get_vm_boot_count(vm):
+ 
+ @pytest.fixture(scope="class")
+ def boot_count_before_reset(vm_for_test):
++    """Capture boot count before reset operation."""
+     return get_vm_boot_count(vm=vm_for_test)
+ 
+ 
++@pytest.fixture(scope="class")
++def vmi_uid_before_reset(vm_for_test):
++    """Capture VMI UID before reset operation."""
++    return vm_for_test.vmi.instance.metadata.uid
++
++
+ @pytest.fixture(scope="class")
+ def vm_reset_and_running(vm_for_test):
++    """Perform VMI reset and wait for VM to be running again."""
+     vm_for_test.vmi.reset()
+     wait_for_running_vm(vm=vm_for_test)
+ 
+ 
+ @pytest.mark.parametrize("vm_for_test", [pytest.param("vm-for-reset-test")], indirect=True)
+ class TestVMIReset:
++    """Test suite for VMI reset functionality - basic API operations."""
++
+     @pytest.mark.polarion("CNV-12373")
+     def test_reset_success(
+         self,
+@@ -38,4 +69,214 @@ class TestVMIReset:
+         boot_count_before_reset,
+         vm_reset_and_running,
+     ):
+-        assert get_vm_boot_count(vm=vm_for_test) - boot_count_before_reset == 1, "Expected 1 boot entry after VMI reset"
++        """
++        Test Scenario TS-01: Reset running VMI via API and verify guest reboots.
++        Test Scenario TS-11: Verify boot time changes after reset.
++
++        Acceptance Criteria: AC-1, AC-2, AC-3
++        Tier: 2 (End-to-End)
++
++        Validates that:
++        - VMI reset API endpoint functions correctly
++        - Guest OS actually reboots (boot count increases)
++        - VM returns to running state after reset
++        """
++        LOGGER.info("Verifying VM boot count increased after reset")
++        boot_count_after = get_vm_boot_count(vm=vm_for_test)
++        assert (
++            boot_count_after - boot_count_before_reset == 1
++        ), f"Expected 1 boot entry after VMI reset, got {boot_count_after - boot_count_before_reset}"
++
++    @pytest.mark.polarion("CNV-12374")
++    def test_vmi_uid_unchanged_after_reset(
++        self,
++        vm_for_test,
++        vmi_uid_before_reset,
++        vm_reset_and_running,
++    ):
++        """
++        Test Scenario TS-03: Verify VMI UID remains unchanged after reset.
++
++        Acceptance Criteria: AC-2
++        Tier: 2 (End-to-End)
++
++        Validates that:
++        - Reset does not cause VMI recreation
++        - VMI UID persists across reset
++        - No pod rescheduling occurs
++        """
++        LOGGER.info("Verifying VMI UID unchanged after reset")
++        vmi_uid_after = vm_for_test.vmi.instance.metadata.uid
++        assert vmi_uid_before_reset == vmi_uid_after, (
++            f"VMI UID changed after reset: before={vmi_uid_before_reset}, after={vmi_uid_after}"
++        )
++
++
++@pytest.mark.polarion("CNV-12375")
++@pytest.mark.parametrize("vm_for_test", [pytest.param("vm-for-virtctl-reset-test")], indirect=True)
++def test_reset_via_virtctl_command(vm_for_test, namespace):
++    """
++    Test Scenario TS-02: Reset running VMI via virtctl command.
++
++    Acceptance Criteria: AC-1, AC-4
++    Tier: 1 (Functional)
++
++    Validates that:
++    - virtctl reset command is available
++    - Command successfully triggers VMI reset
++    - VM returns to running state
++    """
++    LOGGER.info(f"Resetting VMI {vm_for_test.name} via virtctl command")
++
++    # Capture boot count before reset
++    boot_count_before = get_vm_boot_count(vm=vm_for_test)
++
++    # Execute virtctl reset command
++    success, output = run_virtctl_command(
++        command=["reset", vm_for_test.name],
++        namespace=namespace.name,
++        check=True,
++    )
++
++    assert success, f"virtctl reset command failed: {output}"
++    LOGGER.info(f"virtctl reset output: {output}")
++
++    # Wait for VM to be running again
++    wait_for_running_vm(vm=vm_for_test)
++
++    # Verify boot count increased
++    boot_count_after = get_vm_boot_count(vm=vm_for_test)
++    assert boot_count_after - boot_count_before == 1, (
++        f"Expected 1 boot entry after virtctl reset, got {boot_count_after - boot_count_before}"
++    )
++
++
++class TestVMIResetRBAC:
++    """Test suite for VMI reset RBAC permissions."""
++
++    @pytest.mark.polarion("CNV-12376")
++    def test_unprivileged_user_reset_without_rbac(self, unprivileged_user_vm_for_reset):
++        """
++        Test Scenario TS-04 (Negative): Verify RBAC enforcement for reset operation.
++
++        Acceptance Criteria: AC-5
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Namespace admin without specific reset permissions cannot reset VMI
++        - ForbiddenError is raised for unauthorized reset attempts
++        """
++        LOGGER.info("Attempting VMI reset without proper RBAC permissions (should fail)")
++        with pytest.raises(ForbiddenError):
++            unprivileged_user_vm_for_reset.vmi.reset()
++            pytest.fail(
++                "Namespace admin should not be able to reset VMI without kubevirt.io:edit RoleBinding!"
++            )
++
++    @pytest.mark.polarion("CNV-12377")
++    @pytest.mark.usefixtures("unprivileged_user_reset_rolebinding")
++    def test_unprivileged_user_reset_with_rbac(self, unprivileged_user_vm_for_reset):
++        """
++        Test Scenario TS-04 (Positive): Verify user with edit role can reset VMI.
++
++        Acceptance Criteria: AC-5
++        Tier: 1 (Functional)
++
++        Validates that:
++        - User with kubevirt.io:edit role can reset VMI
++        - Reset succeeds when proper permissions are granted
++        """
++        LOGGER.info("Resetting VMI with proper RBAC permissions (should succeed)")
++        boot_count_before = get_vm_boot_count(vm=unprivileged_user_vm_for_reset)
++
++        unprivileged_user_vm_for_reset.vmi.reset()
++        wait_for_running_vm(vm=unprivileged_user_vm_for_reset)
++
++        boot_count_after = get_vm_boot_count(vm=unprivileged_user_vm_for_reset)
++        assert boot_count_after - boot_count_before == 1, (
++            f"Expected 1 boot entry after reset, got {boot_count_after - boot_count_before}"
++        )
++
++
++class TestVMIResetErrorHandling:
++    """Test suite for VMI reset error handling and edge cases."""
++
++    @pytest.mark.polarion("CNV-12378")
++    def test_reset_stopped_vmi_fails(self, stopped_vm_for_test):
++        """
++        Test Scenario TS-05: Verify reset fails on non-running VMI with appropriate error.
++
++        Acceptance Criteria: AC-6
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Reset operation fails gracefully on stopped VMIs
++        - Appropriate error is returned
++        """
++        LOGGER.info("Attempting to reset a stopped VMI (should fail)")
++
++        # Verify VM has no VMI running
++        assert not stopped_vm_for_test.vmi.exists, "VM should not have a running VMI"
++
++        # Attempt reset should raise an error
++        with pytest.raises((NotFoundError, AttributeError)):
++            stopped_vm_for_test.vmi.reset()
++
++    @pytest.mark.polarion("CNV-12379")
++    def test_reset_non_existent_vmi_fails(self, namespace, unprivileged_client):
++        """
++        Test Scenario TS-06: Verify reset fails on non-existent VMI.
++
++        Acceptance Criteria: AC-6
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Reset operation fails on non-existent VMI
++        - NotFoundError is raised
++        """
++        LOGGER.info("Attempting to reset a non-existent VMI (should fail)")
++
++        # Create VMI object reference to non-existent VMI
++        non_existent_vmi = VirtualMachineInstance(
++            name="non-existent-vmi",
++            namespace=namespace.name,
+commit 605d9395e6e49c3c8a47891460660f1d21106860 (v0.3)
+Author: Michal Vavrinec <mvavrine@redhat.com>
+Date:   Mon Jan 26 11:25:12 2026 +0100
+
+    experiment 3
+
+diff --git a/tests/virt/node/general/conftest.py b/tests/virt/node/general/conftest.py
+new file mode 100644
+index 0000000..a303d07
+--- /dev/null
++++ b/tests/virt/node/general/conftest.py
+@@ -0,0 +1,77 @@
++import logging
++
++import pytest
++from ocp_resources.cluster_role import ClusterRole
++from ocp_resources.role_binding import RoleBinding
++
++from utilities.constants import UNPRIVILEGED_USER
++from utilities.virt import VirtualMachineForTests, fedora_vm_body, running_vm
++
++LOGGER = logging.getLogger(__name__)
++
++
++@pytest.fixture(scope="session")
++def kubevirt_reset_cluster_role(admin_client):
++    """Get the kubevirt.io:edit ClusterRole which includes VMI reset permissions."""
++    return ClusterRole(name="kubevirt.io:edit", client=admin_client, ensure_exists=True)
++
++
++@pytest.fixture()
++def unprivileged_user_reset_rolebinding(admin_client, namespace, kubevirt_reset_cluster_role):
++    """Create RoleBinding to grant VMI reset permissions to unprivileged user."""
++    with RoleBinding(
++        name="role-bind-kubevirt-reset",
++        namespace=namespace.name,
++        client=admin_client,
++        subjects_kind="User",
++        subjects_name=UNPRIVILEGED_USER,
++        subjects_namespace=namespace.name,
++        role_ref_kind=kubevirt_reset_cluster_role.kind,
++        role_ref_name=kubevirt_reset_cluster_role.name,
++    ) as role_binding:
++        yield role_binding
++
++
++@pytest.fixture()
++def stopped_vm_for_test(namespace, unprivileged_client):
++    """Fixture for a stopped VM (no VMI running)."""
++    vm_name = "stopped-vm-for-reset-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=vm_name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=vm_name),
++    ) as vm:
++        # Create VM but don't start it (no VMI)
++        yield vm
++
++
++@pytest.fixture()
++def paused_vm_for_test(namespace, unprivileged_client):
++    """Fixture for a paused VM."""
++    vm_name = "paused-vm-for-reset-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=vm_name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=vm_name),
++    ) as vm:
++        # Start the VM first
++        running_vm(vm=vm)
++        # Then pause it
++        vm.privileged_vmi.pause(wait=True)
++        yield vm
++
++
++@pytest.fixture()
++def unprivileged_user_vm_for_reset(unprivileged_client, namespace):
++    """VM for unprivileged user RBAC testing."""
++    name = "namespace-admin-vm-reset"
++    with VirtualMachineForTests(
++        name=name,
++        client=unprivileged_client,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=name),
++    ) as vm:
++        running_vm(vm=vm)
++        yield vm
+diff --git a/tests/virt/node/general/test_vmi_reset.py b/tests/virt/node/general/test_vmi_reset.py
+index a8a3656..fe61853 100644
+--- a/tests/virt/node/general/test_vmi_reset.py
++++ b/tests/virt/node/general/test_vmi_reset.py
+@@ -1,15 +1,36 @@
++"""
++Test Suite for VMI Force/Hard Reset Functionality
++
++Test Plan: VIRTSTRAT-357 - GA: Force/hard reset
++GitHub PR: kubevirt/kubevirt#13208
++
++This test suite validates the VMI reset functionality, which provides a hardware-level
++reset for VirtualMachineInstance objects without requiring pod rescheduling.
++"""
+ import logging
+ import shlex
+ 
+ import pytest
++from kubernetes.dynamic.exceptions import ForbiddenError, NotFoundError
++from ocp_resources.virtual_machine_instance import VirtualMachineInstance
+ from pyhelper_utils.shell import run_ssh_commands
+ 
++from utilities.infra import run_virtctl_command
+ from utilities.virt import wait_for_running_vm
+ 
+ LOGGER = logging.getLogger(__name__)
+ 
+ 
+ def get_vm_boot_count(vm):
++    """
++    Get the number of times a VM has booted by checking journalctl boot entries.
++
++    Args:
++        vm: VirtualMachineForTests instance with SSH access
++
++    Returns:
++        int: Number of boot entries in the journal
++    """
+     reboot_count = run_ssh_commands(
+         host=vm.ssh_exec,
+         commands=[shlex.split("journalctl --list-boots | wc -l")],
+@@ -20,17 +41,27 @@ def get_vm_boot_count(vm):
+ 
+ @pytest.fixture(scope="class")
+ def boot_count_before_reset(vm_for_test):
++    """Capture boot count before reset operation."""
+     return get_vm_boot_count(vm=vm_for_test)
+ 
+ 
++@pytest.fixture(scope="class")
++def vmi_uid_before_reset(vm_for_test):
++    """Capture VMI UID before reset operation."""
++    return vm_for_test.vmi.instance.metadata.uid
++
++
+ @pytest.fixture(scope="class")
+ def vm_reset_and_running(vm_for_test):
++    """Perform VMI reset and wait for VM to be running again."""
+     vm_for_test.vmi.reset()
+     wait_for_running_vm(vm=vm_for_test)
+ 
+ 
+ @pytest.mark.parametrize("vm_for_test", [pytest.param("vm-for-reset-test")], indirect=True)
+ class TestVMIReset:
++    """Test suite for VMI reset functionality - basic API operations."""
++
+     @pytest.mark.polarion("CNV-12373")
+     def test_reset_success(
+         self,
+@@ -38,4 +69,214 @@ class TestVMIReset:
+         boot_count_before_reset,
+         vm_reset_and_running,
+     ):
+-        assert get_vm_boot_count(vm=vm_for_test) - boot_count_before_reset == 1, "Expected 1 boot entry after VMI reset"
++        """
++        Test Scenario TS-01: Reset running VMI via API and verify guest reboots.
++        Test Scenario TS-11: Verify boot time changes after reset.
++
++        Acceptance Criteria: AC-1, AC-2, AC-3
++        Tier: 2 (End-to-End)
++
++        Validates that:
++        - VMI reset API endpoint functions correctly
++        - Guest OS actually reboots (boot count increases)
++        - VM returns to running state after reset
++        """
++        LOGGER.info("Verifying VM boot count increased after reset")
++        boot_count_after = get_vm_boot_count(vm=vm_for_test)
++        assert (
++            boot_count_after - boot_count_before_reset == 1
++        ), f"Expected 1 boot entry after VMI reset, got {boot_count_after - boot_count_before_reset}"
++
++    @pytest.mark.polarion("CNV-12374")
++    def test_vmi_uid_unchanged_after_reset(
++        self,
++        vm_for_test,
++        vmi_uid_before_reset,
++        vm_reset_and_running,
++    ):
++        """
++        Test Scenario TS-03: Verify VMI UID remains unchanged after reset.
++
++        Acceptance Criteria: AC-2
++        Tier: 2 (End-to-End)
++
++        Validates that:
++        - Reset does not cause VMI recreation
++        - VMI UID persists across reset
++        - No pod rescheduling occurs
++        """
++        LOGGER.info("Verifying VMI UID unchanged after reset")
++        vmi_uid_after = vm_for_test.vmi.instance.metadata.uid
++        assert vmi_uid_before_reset == vmi_uid_after, (
++            f"VMI UID changed after reset: before={vmi_uid_before_reset}, after={vmi_uid_after}"
++        )
++
++
++@pytest.mark.polarion("CNV-12375")
++@pytest.mark.parametrize("vm_for_test", [pytest.param("vm-for-virtctl-reset-test")], indirect=True)
++def test_reset_via_virtctl_command(vm_for_test, namespace):
++    """
++    Test Scenario TS-02: Reset running VMI via virtctl command.
++
++    Acceptance Criteria: AC-1, AC-4
++    Tier: 1 (Functional)
++
++    Validates that:
++    - virtctl reset command is available
++    - Command successfully triggers VMI reset
++    - VM returns to running state
++    """
++    LOGGER.info(f"Resetting VMI {vm_for_test.name} via virtctl command")
++
++    # Capture boot count before reset
++    boot_count_before = get_vm_boot_count(vm=vm_for_test)
++
++    # Execute virtctl reset command
++    success, output = run_virtctl_command(
++        command=["reset", vm_for_test.name],
++        namespace=namespace.name,
++        check=True,
++    )
++
++    assert success, f"virtctl reset command failed: {output}"
++    LOGGER.info(f"virtctl reset output: {output}")
++
++    # Wait for VM to be running again
++    wait_for_running_vm(vm=vm_for_test)
++
++    # Verify boot count increased
++    boot_count_after = get_vm_boot_count(vm=vm_for_test)
++    assert boot_count_after - boot_count_before == 1, (
++        f"Expected 1 boot entry after virtctl reset, got {boot_count_after - boot_count_before}"
++    )
++
++
++class TestVMIResetRBAC:
++    """Test suite for VMI reset RBAC permissions."""
++
++    @pytest.mark.polarion("CNV-12376")
++    def test_unprivileged_user_reset_without_rbac(self, unprivileged_user_vm_for_reset):
++        """
++        Test Scenario TS-04 (Negative): Verify RBAC enforcement for reset operation.
++
++        Acceptance Criteria: AC-5
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Namespace admin without specific reset permissions cannot reset VMI
++        - ForbiddenError is raised for unauthorized reset attempts
++        """
++        LOGGER.info("Attempting VMI reset without proper RBAC permissions (should fail)")
++        with pytest.raises(ForbiddenError):
++            unprivileged_user_vm_for_reset.vmi.reset()
++            pytest.fail(
++                "Namespace admin should not be able to reset VMI without kubevirt.io:edit RoleBinding!"
++            )
++
++    @pytest.mark.polarion("CNV-12377")
++    @pytest.mark.usefixtures("unprivileged_user_reset_rolebinding")
++    def test_unprivileged_user_reset_with_rbac(self, unprivileged_user_vm_for_reset):
++        """
++        Test Scenario TS-04 (Positive): Verify user with edit role can reset VMI.
++
++        Acceptance Criteria: AC-5
++        Tier: 1 (Functional)
++
++        Validates that:
++        - User with kubevirt.io:edit role can reset VMI
++        - Reset succeeds when proper permissions are granted
++        """
++        LOGGER.info("Resetting VMI with proper RBAC permissions (should succeed)")
++        boot_count_before = get_vm_boot_count(vm=unprivileged_user_vm_for_reset)
++
++        unprivileged_user_vm_for_reset.vmi.reset()
++        wait_for_running_vm(vm=unprivileged_user_vm_for_reset)
++
++        boot_count_after = get_vm_boot_count(vm=unprivileged_user_vm_for_reset)
++        assert boot_count_after - boot_count_before == 1, (
++            f"Expected 1 boot entry after reset, got {boot_count_after - boot_count_before}"
++        )
++
++
++class TestVMIResetErrorHandling:
++    """Test suite for VMI reset error handling and edge cases."""
++
++    @pytest.mark.polarion("CNV-12378")
++    def test_reset_stopped_vmi_fails(self, stopped_vm_for_test):
++        """
++        Test Scenario TS-05: Verify reset fails on non-running VMI with appropriate error.
++
++        Acceptance Criteria: AC-6
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Reset operation fails gracefully on stopped VMIs
++        - Appropriate error is returned
++        """
++        LOGGER.info("Attempting to reset a stopped VMI (should fail)")
++
++        # Verify VM has no VMI running
++        assert not stopped_vm_for_test.vmi.exists, "VM should not have a running VMI"
++
++        # Attempt reset should raise an error
++        with pytest.raises((NotFoundError, AttributeError)):
++            stopped_vm_for_test.vmi.reset()
++
++    @pytest.mark.polarion("CNV-12379")
++    def test_reset_non_existent_vmi_fails(self, namespace, unprivileged_client):
++        """
++        Test Scenario TS-06: Verify reset fails on non-existent VMI.
++
++        Acceptance Criteria: AC-6
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Reset operation fails on non-existent VMI
++        - NotFoundError is raised
++        """
++        LOGGER.info("Attempting to reset a non-existent VMI (should fail)")
++
++        # Create VMI object reference to non-existent VMI
++        non_existent_vmi = VirtualMachineInstance(
++            name="non-existent-vmi",
++            namespace=namespace.name,
++            client=unprivileged_client,
++        )
++
++        # Attempt reset should raise NotFoundError
++        with pytest.raises(NotFoundError):
++            non_existent_vmi.reset()
++
++    @pytest.mark.polarion("CNV-12380")
++    def test_reset_paused_vmi_behavior(self, paused_vm_for_test):
++        """
++        Test Scenario TS-12: Verify reset on paused VMI behavior.
++
++        Acceptance Criteria: AC-6
++        Tier: 1 (Functional)
++
++        Validates that:
++        - Reset operation behavior on paused VMI is documented
++        - System handles paused state appropriately during reset
++        """
++        LOGGER.info("Testing reset behavior on paused VMI")
++
++        # Verify VM is paused
++        assert (
++            paused_vm_for_test.printable_status == paused_vm_for_test.Status.PAUSED
++        ), f"VM should be paused, but status is: {paused_vm_for_test.printable_status}"
++
++        # Capture boot count before reset
++        boot_count_before = get_vm_boot_count(vm=paused_vm_for_test)
++
++        # Attempt reset on paused VMI
++        paused_vm_for_test.vmi.reset()
++
++        # Wait for VM to be running (reset should unpause and reboot)
++        wait_for_running_vm(vm=paused_vm_for_test)
++
++        # Verify boot count increased
++        boot_count_after = get_vm_boot_count(vm=paused_vm_for_test)
++        assert boot_count_after - boot_count_before == 1, (
++            f"Expected 1 boot entry after reset on paused VMI, got {boot_count_after - boot_count_before}"
++        )

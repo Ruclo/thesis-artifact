@@ -1,0 +1,575 @@
+diff --git a/tests/virt/cluster/vm_snapshot_restore/__init__.py b/tests/virt/cluster/vm_snapshot_restore/__init__.py
+new file mode 100644
+index 0000000..3938dd3
+--- /dev/null
++++ b/tests/virt/cluster/vm_snapshot_restore/__init__.py
+@@ -0,0 +1 @@
++# VM Snapshot Restore Tests
+diff --git a/tests/virt/cluster/vm_snapshot_restore/conftest.py b/tests/virt/cluster/vm_snapshot_restore/conftest.py
+new file mode 100644
+index 0000000..f185fcd
+--- /dev/null
++++ b/tests/virt/cluster/vm_snapshot_restore/conftest.py
+@@ -0,0 +1,24 @@
++"""
++Pytest conftest file for VM snapshot restore tests
++"""
++
++import pytest
++from ocp_resources.storage_class import StorageClass
++
++from tests.storage.utils import check_snapshot_indication
++
++
++@pytest.fixture(scope="session")
++def skip_if_no_storage_class_for_snapshot(admin_client):
++    """
++    Skip tests if no storage class with snapshot capability is available.
++    """
++    storage_classes = list(StorageClass.get(dyn_client=admin_client))
++
++    snapshot_capable = [
++        sc for sc in storage_classes
++        if check_snapshot_indication(storage_class=sc)
++    ]
++
++    if not snapshot_capable:
++        pytest.skip("No storage class with snapshot capability available")
+diff --git a/tests/virt/cluster/vm_snapshot_restore/test_snapshot_restore_run_strategy.py b/tests/virt/cluster/vm_snapshot_restore/test_snapshot_restore_run_strategy.py
+new file mode 100644
+index 0000000..cfbc619
+--- /dev/null
++++ b/tests/virt/cluster/vm_snapshot_restore/test_snapshot_restore_run_strategy.py
+@@ -0,0 +1,532 @@
++"""
++VM Snapshot Restore with runStrategy Tests
++
++Test Plan: CNV-63819 - VM snapshot restore stuck with runStrategy RerunOnFailure
++
++Tests verify that snapshot restore completes successfully for VMs with various
++runStrategy values, particularly RerunOnFailure which previously caused restore
++to get stuck.
++"""
++
++import logging
++import shlex
++
++import pytest
++from ocp_resources.datavolume import DataVolume
++from ocp_resources.resource import ResourceEditor
++from ocp_resources.virtual_machine import VirtualMachine
++from ocp_resources.virtual_machine_instance import VirtualMachineInstance
++from ocp_resources.virtual_machine_restore import VirtualMachineRestore
++from ocp_resources.virtual_machine_snapshot import VirtualMachineSnapshot
++from pyhelper_utils.shell import run_ssh_commands
++from timeout_sampler import TimeoutSampler
++
++from tests.utils import get_http_image_url
++from utilities.artifactory import get_artifactory_config_map, get_artifactory_secret
++from utilities.constants import LS_COMMAND, OS_FLAVOR_RHEL, TIMEOUT_5MIN, TIMEOUT_10MIN, Images
++from utilities.virt import VirtualMachineForTests, running_vm
++
++LOGGER = logging.getLogger(__name__)
++
++MANUAL = VirtualMachine.RunStrategy.MANUAL
++ALWAYS = VirtualMachine.RunStrategy.ALWAYS
++HALTED = VirtualMachine.RunStrategy.HALTED
++RERUNONFAILURE = VirtualMachine.RunStrategy.RERUNONFAILURE
++
++TEST_FILE_NAME = "test-file-before-snapshot.txt"
++TEST_FILE_CONTENT = "snapshot-test-data"
++
++
++pytestmark = [
++    pytest.mark.virt,
++    pytest.mark.storage,
++    pytest.mark.usefixtures("skip_if_no_storage_class_for_snapshot"),
++]
++
++
++@pytest.fixture(scope="module")
++def vm_for_snapshot_restore(
++    namespace,
++    unprivileged_client,
++    storage_class_matrix_snapshot_matrix__module__,
++):
++    """
++    Create a RHEL VM for snapshot restore testing.
++    """
++    artifactory_secret = get_artifactory_secret(namespace=namespace.name)
++    artifactory_config_map = get_artifactory_config_map(namespace=namespace.name)
++
++    storage_class = [*storage_class_matrix_snapshot_matrix__module__][0]
++
++    dv = DataVolume(
++        name="dv-snapshot-restore-test",
++        namespace=namespace.name,
++        source="http",
++        url=get_http_image_url(image_directory=Images.Rhel.DIR, image_name=Images.Rhel.LATEST_RELEASE_STR),
++        storage_class=storage_class,
++        size=Images.Rhel.DEFAULT_DV_SIZE,
++        api_name="storage",
++        secret=artifactory_secret,
++        cert_configmap=artifactory_config_map.name,
++    )
++    dv.to_dict()
++
++    with VirtualMachineForTests(
++        name="vm-snapshot-restore-test",
++        namespace=namespace.name,
++        client=unprivileged_client,
++        os_flavor=OS_FLAVOR_RHEL,
++        memory_guest=Images.Rhel.DEFAULT_MEMORY_SIZE,
++        data_volume_template={
++            "metadata": dv.res["metadata"],
++            "spec": dv.res["spec"],
++        },
++    ) as vm:
++        yield vm
++
++
++@pytest.fixture()
++def vm_with_run_strategy(request, vm_for_snapshot_restore):
++    """
++    Configure VM with requested runStrategy and ensure it's stopped.
++    """
++    run_strategy = request.param["run_strategy"]
++
++    LOGGER.info(f"Configuring VM with runStrategy: {run_strategy}")
++
++    if vm_for_snapshot_restore.vmi.exists and vm_for_snapshot_restore.vmi.status == VirtualMachineInstance.Status.RUNNING:
++        vm_for_snapshot_restore.stop(wait=True)
++
++    ResourceEditor(
++        patches={vm_for_snapshot_restore: {"spec": {"runStrategy": run_strategy}}}
++    ).update()
++
++    return vm_for_snapshot_restore
++
++
++@pytest.fixture()
++def vm_snapshot_with_data(vm_with_run_strategy, admin_client):
++    """
++    Start VM, write test data, take snapshot, then stop VM.
++
++    Returns snapshot object ready for restore testing.
++    """
++    vm = vm_with_run_strategy
++
++    LOGGER.info(f"Starting VM {vm.name} to write test data")
++    running_vm(vm=vm)
++
++    LOGGER.info(f"Writing test file '{TEST_FILE_NAME}' to VM")
++    create_test_file_cmd = shlex.split(
++        f"bash -c {shlex.quote(f'echo {TEST_FILE_CONTENT} > {TEST_FILE_NAME}')}"
++    )
++    run_ssh_commands(host=vm.ssh_exec, commands=create_test_file_cmd)
++
++    LOGGER.info(f"Creating snapshot for VM {vm.name}")
++    with VirtualMachineSnapshot(
++        name=f"{vm.name}-snapshot",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        client=admin_client,
++    ) as snapshot:
++        LOGGER.info("Waiting for snapshot to be ready")
++        snapshot.wait_snapshot_done(timeout=TIMEOUT_10MIN)
++
++        LOGGER.info(f"Stopping VM {vm.name} before restore")
++        vm.stop(wait=True)
++
++        yield snapshot
++
++
++def verify_test_file_exists(vm):
++    """
++    Verify test file exists and contains expected content.
++
++    Args:
++        vm: VirtualMachine object to check
++
++    Raises:
++        AssertionError: If file doesn't exist or content doesn't match
++    """
++    LOGGER.info(f"Verifying test file exists on VM {vm.name}")
++
++    list_cmd_output = run_ssh_commands(
++        host=vm.ssh_exec,
++        commands=shlex.split(f"bash -c {shlex.quote(LS_COMMAND)}"),
++    )[0].strip()
++
++    assert TEST_FILE_NAME in list_cmd_output, (
++        f"Expected file '{TEST_FILE_NAME}' not found. Files: {list_cmd_output}"
++    )
++
++    read_cmd_output = run_ssh_commands(
++        host=vm.ssh_exec,
++        commands=shlex.split(f"bash -c {shlex.quote(f'cat {TEST_FILE_NAME}')}"),
++    )[0].strip()
++
++    assert TEST_FILE_CONTENT in read_cmd_output, (
++        f"Expected content '{TEST_FILE_CONTENT}' not in file. Got: {read_cmd_output}"
++    )
++
++
++@pytest.mark.polarion("CNV-63819")
++@pytest.mark.parametrize(
++    "vm_with_run_strategy",
++    [pytest.param({"run_strategy": RERUNONFAILURE}, id="rerunonfailure")],
++    indirect=True,
++)
++def test_snapshot_restore_with_rerunonfailure(
++    admin_client,
++    vm_snapshot_with_data,
++    vm_with_run_strategy,
++):
++    """
++    Verify snapshot restore completes for VM with runStrategy: RerunOnFailure.
++
++    This test addresses CNV-63819 where snapshot restore would get stuck when
++    VM has RerunOnFailure run strategy because virt-controller would immediately
++    try to start the VM, blocking the restore operation.
++
++    Steps:
++    1. VM with RerunOnFailure is created with test data
++    2. Snapshot is taken while VM is running
++    3. VM is stopped
++    4. Restore is initiated
++    5. Verify restore completes successfully
++    6. Verify VM can be started manually
++    7. Verify test data is intact
++    """
++    vm = vm_with_run_strategy
++    snapshot = vm_snapshot_with_data
++
++    LOGGER.info(f"Creating restore from snapshot {snapshot.name}")
++    with VirtualMachineRestore(
++        client=admin_client,
++        name=f"{vm.name}-restore",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        snapshot_name=snapshot.name,
++    ) as vm_restore:
++        LOGGER.info("Waiting for restore to complete")
++        vm_restore.wait_restore_done(timeout=TIMEOUT_10MIN)
++
++        LOGGER.info("Restore completed, starting VM manually")
++        running_vm(vm=vm)
++
++        LOGGER.info("Verifying restored data")
++        verify_test_file_exists(vm=vm)
++
++
++@pytest.mark.polarion("CNV-63819")
++@pytest.mark.parametrize(
++    "vm_with_run_strategy",
++    [pytest.param({"run_strategy": RERUNONFAILURE}, id="rerunonfailure")],
++    indirect=True,
++)
++def test_vm_not_started_during_restore(
++    admin_client,
++    vm_snapshot_with_data,
++    vm_with_run_strategy,
++):
++    """
++    Verify VM doesn't auto-start during restore operation.
++
++    For RerunOnFailure strategy, virt-controller should not attempt to start
++    VM while restore is in progress. This test monitors VMI existence during
++    restore to ensure VM doesn't start prematurely.
++
++    Steps:
++    1. Create restore operation
++    2. During restore, verify no VMI exists
++    3. Wait for restore to complete
++    4. Verify restore succeeded
++    """
++    vm = vm_with_run_strategy
++    snapshot = vm_snapshot_with_data
++
++    LOGGER.info(f"Creating restore from snapshot {snapshot.name}")
++    with VirtualMachineRestore(
++        client=admin_client,
++        name=f"{vm.name}-restore-no-start",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        snapshot_name=snapshot.name,
++    ) as vm_restore:
++        LOGGER.info("Checking VM doesn't start during restore")
++
++        for sample in TimeoutSampler(
++            wait_timeout=TIMEOUT_5MIN,
++            sleep=5,
++            func=lambda: vm_restore.instance.status.get("complete"),
++        ):
++            if sample:
++                LOGGER.info("Restore marked as complete")
++                break
++
++            assert not vm.vmi.exists, (
++                f"VMI should not exist during restore, but VMI found with status: {vm.vmi.status}"
++            )
++
++            LOGGER.info("Verified: VMI does not exist during restore (correct behavior)")
++
++
++@pytest.mark.polarion("CNV-63819")
++@pytest.mark.parametrize(
++    "vm_with_run_strategy",
++    [pytest.param({"run_strategy": RERUNONFAILURE}, id="rerunonfailure")],
++    indirect=True,
++)
++def test_restore_status_completes(
++    admin_client,
++    vm_snapshot_with_data,
++    vm_with_run_strategy,
++):
++    """
++    Verify VirtualMachineRestore resource reaches Complete state.
++
++    The restore operation should complete and status.complete should be True,
++    not stuck indefinitely.
++
++    Steps:
++    1. Create restore operation
++    2. Wait for status.complete to be True
++    3. Verify restore conditions are successful
++    """
++    vm = vm_with_run_strategy
++    snapshot = vm_snapshot_with_data
++
++    LOGGER.info(f"Creating restore and monitoring status for {vm.name}")
++    with VirtualMachineRestore(
++        client=admin_client,
++        name=f"{vm.name}-restore-status",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        snapshot_name=snapshot.name,
++    ) as vm_restore:
++        LOGGER.info("Waiting for restore complete status")
++        vm_restore.wait_restore_done(timeout=TIMEOUT_10MIN)
++
++        LOGGER.info("Verifying restore status fields")
++        restore_status = vm_restore.instance.status
++
++        assert restore_status.get("complete") is True, (
++            f"Restore should be complete. Status: {restore_status}"
++        )
++
++        LOGGER.info(f"Restore completed successfully. Status: {restore_status}")
++
++
++@pytest.mark.polarion("CNV-63819")
++@pytest.mark.parametrize(
++    "vm_with_run_strategy",
++    [pytest.param({"run_strategy": RERUNONFAILURE}, id="rerunonfailure")],
++    indirect=True,
++)
++def test_manual_start_after_restore(
++    admin_client,
++    vm_snapshot_with_data,
++    vm_with_run_strategy,
++):
++    """
++    Verify VM can be started manually after restore completes.
++
++    After restore completes, user should be able to manually start the VM
++    and it should reach Running state normally.
++
++    Steps:
++    1. Complete restore operation
++    2. Manually start VM
++    3. Verify VM reaches Running state
++    4. Verify VM is functional (can execute commands)
++    """
++    vm = vm_with_run_strategy
++    snapshot = vm_snapshot_with_data
++
++    LOGGER.info(f"Restoring snapshot for {vm.name}")
++    with VirtualMachineRestore(
++        client=admin_client,
++        name=f"{vm.name}-restore-start",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        snapshot_name=snapshot.name,
++    ) as vm_restore:
++        vm_restore.wait_restore_done(timeout=TIMEOUT_10MIN)
++
++        LOGGER.info("Restore complete, attempting manual start")
++        running_vm(vm=vm)
++
++        LOGGER.info("Verifying VM is functional")
++        assert vm.vmi.exists, "VMI should exist after manual start"
++        assert vm.vmi.status == VirtualMachineInstance.Status.RUNNING, (
++            f"VMI should be Running. Got: {vm.vmi.status}"
++        )
++
++        verify_test_file_exists(vm=vm)
++        LOGGER.info("VM started successfully and is functional")
++
++
++@pytest.mark.polarion("CNV-63819")
++@pytest.mark.parametrize(
++    "vm_with_run_strategy",
++    [
++        pytest.param({"run_strategy": ALWAYS}, id="always"),
++        pytest.param({"run_strategy": MANUAL}, id="manual"),
++        pytest.param({"run_strategy": HALTED}, id="halted"),
++    ],
++    indirect=True,
++)
++def test_snapshot_restore_regression_all_strategies(
++    admin_client,
++    vm_snapshot_with_data,
++    vm_with_run_strategy,
++):
++    """
++    Regression test: Verify snapshot restore works for other run strategies.
++
++    Ensure the fix for RerunOnFailure doesn't break snapshot restore for
++    other run strategies (Always, Manual, Halted).
++
++    Steps:
++    1. VM with various runStrategy values
++    2. Take snapshot and restore
++    3. Verify restore completes
++    4. Start VM if needed
++    5. Verify data intact
++    """
++    vm = vm_with_run_strategy
++    snapshot = vm_snapshot_with_data
++    run_strategy = vm.instance.spec.runStrategy
++
++    LOGGER.info(f"Testing snapshot restore with runStrategy: {run_strategy}")
++
++    with VirtualMachineRestore(
++        client=admin_client,
++        name=f"{vm.name}-restore-regression",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        snapshot_name=snapshot.name,
++    ) as vm_restore:
++        LOGGER.info(f"Waiting for restore to complete for {run_strategy}")
++        vm_restore.wait_restore_done(timeout=TIMEOUT_10MIN)
++
++        LOGGER.info("Restore completed, starting VM if needed")
++        if run_strategy in [MANUAL, HALTED]:
++            running_vm(vm=vm)
++
++        LOGGER.info(f"Verifying data for runStrategy {run_strategy}")
++        verify_test_file_exists(vm=vm)
++
++
++@pytest.mark.tier2
++@pytest.mark.polarion("CNV-63819")
++@pytest.mark.parametrize(
++    "vm_with_run_strategy",
++    [pytest.param({"run_strategy": RERUNONFAILURE}, id="rerunonfailure")],
++    indirect=True,
++)
++def test_complete_workflow_with_data_validation(
++    admin_client,
++    vm_with_run_strategy,
++):
++    """
++    End-to-end test: Complete snapshot/restore workflow with data validation.
++
++    This test validates the complete user workflow from creating a VM through
++    snapshot, restore, and data validation to ensure the entire flow works
++    correctly with RerunOnFailure run strategy.
++
++    Steps:
++    1. Start VM with RerunOnFailure
++    2. Write test data to disk
++    3. Take VirtualMachineSnapshot
++    4. Wait for snapshot ready
++    5. Modify data on VM
++    6. Stop VM
++    7. Create VirtualMachineRestore
++    8. Monitor restore progress
++    9. Verify restore completes
++    10. Start VM manually
++    11. Verify original data (before modification) is restored
++    12. Validate VM functions correctly
++    """
++    vm = vm_with_run_strategy
++
++    LOGGER.info(f"Starting E2E workflow for VM {vm.name} with RerunOnFailure")
++
++    LOGGER.info("Step 1: Starting VM")
++    running_vm(vm=vm)
++
++    LOGGER.info("Step 2: Writing initial test data")
++    initial_data = "initial-snapshot-data"
++    create_initial_file_cmd = shlex.split(
++        f"bash -c {shlex.quote(f'echo {initial_data} > {TEST_FILE_NAME}')}"
++    )
++    run_ssh_commands(host=vm.ssh_exec, commands=create_initial_file_cmd)
++
++    LOGGER.info("Step 3: Creating snapshot")
++    with VirtualMachineSnapshot(
++        name=f"{vm.name}-e2e-snapshot",
++        namespace=vm.namespace,
++        vm_name=vm.name,
++        client=admin_client,
++    ) as snapshot:
++        LOGGER.info("Step 4: Waiting for snapshot ready")
++        snapshot.wait_snapshot_done(timeout=TIMEOUT_10MIN)
++
++        LOGGER.info("Step 5: Modifying data after snapshot")
++        modified_data = "modified-after-snapshot"
++        modify_file_cmd = shlex.split(
++            f"bash -c {shlex.quote(f'echo {modified_data} > {TEST_FILE_NAME}')}"
++        )
++        run_ssh_commands(host=vm.ssh_exec, commands=modify_file_cmd)
++
++        verify_modified_cmd = shlex.split(
++            f"bash -c {shlex.quote(f'cat {TEST_FILE_NAME}')}"
++        )
++        modified_content = run_ssh_commands(
++            host=vm.ssh_exec, commands=verify_modified_cmd
++        )[0].strip()
++        assert modified_data in modified_content, (
++            f"File should contain modified data before restore. Got: {modified_content}"
++        )
++
++        LOGGER.info("Step 6: Stopping VM before restore")
++        vm.stop(wait=True)
++
++        LOGGER.info("Step 7: Creating restore operation")
++        with VirtualMachineRestore(
++            client=admin_client,
++            name=f"{vm.name}-e2e-restore",
++            namespace=vm.namespace,
++            vm_name=vm.name,
++            snapshot_name=snapshot.name,
++        ) as vm_restore:
++            LOGGER.info("Step 8-9: Monitoring and waiting for restore to complete")
++            vm_restore.wait_restore_done(timeout=TIMEOUT_10MIN)
++
++            LOGGER.info("Step 10: Starting VM manually after restore")
++            running_vm(vm=vm)
++
++            LOGGER.info("Step 11: Verifying original data is restored (not modified data)")
++            restored_content = run_ssh_commands(
++                host=vm.ssh_exec, commands=verify_modified_cmd
++            )[0].strip()
++
++            assert initial_data in restored_content, (
++                f"Restored file should contain initial data '{initial_data}', "
++                f"not modified data '{modified_data}'. Got: {restored_content}"
++            )
++
++            assert modified_data not in restored_content, (
++                f"Restored file should NOT contain modified data '{modified_data}'. "
++                f"Got: {restored_content}"
++            )
++
++            LOGGER.info("Step 12: Verifying VM is fully functional")
++            assert vm.vmi.status == VirtualMachineInstance.Status.RUNNING
++
++            test_functionality_cmd = shlex.split("bash -c 'uname -a'")
++            output = run_ssh_commands(host=vm.ssh_exec, commands=test_functionality_cmd)
++            assert output, "VM should be able to execute commands"
++
++            LOGGER.info("E2E workflow completed successfully")

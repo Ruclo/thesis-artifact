@@ -1,0 +1,1533 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.0, pytest-9.0.2, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/mvavrine/cnv/openshift-virtualization-tests
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.12.0, html-4.1.1, order-1.3.0, repeat-0.9.4, progress-1.4.0, dependency-0.6.0, jira-0.3.22, metadata-3.1.1, testconfig-0.2.0, benchmark-5.2.3, mock-3.15.1
+collected 6 items / 1 deselected / 5 selected
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py F [ 20%]
+
+
+_ TestCommonInstancetypesDeploymentDisable.test_disable_common_instancetypes_deployment _
+
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentDisable object at 0x7f468a54c190>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f4689030190>
+common_instancetypes_list = [<ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4688fe86e0>, <ocp..., <ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4689030b90>, ...]
+
+    @pytest.mark.polarion("CNV-61256-01")
+    def test_disable_common_instancetypes_deployment(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+        common_instancetypes_list,
+    ):
+        """
+        Test Scenario 1: Disable Common-Instancetypes
+    
+        Steps:
+            1. Verify common-instancetypes are deployed (default)
+            2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+            3. Wait for HCO reconciliation
+            4. Check for common-instancetype resources
+    
+        Expected Result:
+            All common-instancetype resources are removed
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: critical
+            initialEstimate: 1/4h
+            testSteps:
+                1. Verify common-instancetypes deployed (default)
+                2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+                3. Wait for HCO reconciliation
+                4. Check for common-instancetype resources
+            expectedResults:
+                1. Common-instancetypes are present
+                2. HCO CR updated successfully
+                3. HCO reconciliation completes
+                4. All common-instancetype resources removed
+        """
+        LOGGER.info("Step 1: Verify common-instancetypes are deployed by default")
+        assert common_instancetypes_list, "No common instancetypes found before disabling"
+        initial_count = len(common_instancetypes_list)
+        LOGGER.info(f"Found {initial_count} common instancetypes before disabling")
+    
+        LOGGER.info("Step 2: Edit HCO CR to disable common instancetypes deployment")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+    
+        LOGGER.info("Step 3: Wait for HCO reconciliation")
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 4: Verify all common-instancetype resources are removed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:91: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f4688b5d9f0>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+
+------------------------------------- test_disable_common_instancetypes_deployment -------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-01-23T13:01:02.516376 conftest [32mINFO[0m Executing session fixture: admin_client[0m
+2026-01-23T13:01:02.516604 conftest [32mINFO[0m Executing session fixture: pytestconfig[0m
+2026-01-23T13:01:02.516747 conftest [32mINFO[0m Executing session fixture: installing_cnv[0m
+2026-01-23T13:01:02.516848 conftest [32mINFO[0m Executing session fixture: cnv_tests_utilities_namespace[0m
+2026-01-23T13:01:02.540944 ocp_resources Namespace [32mINFO[0m Create Namespace cnv-tests-utilities[0m
+2026-01-23T13:01:02.541071 ocp_resources Namespace [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'cnv-tests-utilities', 'labels': {'pod-security.kubernetes.io/enforce': 'privileged', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}}, 'spec': {}}[0m
+2026-01-23T13:01:02.589846 ocp_resources Namespace [32mINFO[0m Wait for Namespace cnv-tests-utilities status to be Active[0m
+2026-01-23T13:01:02.590001 timeout_sampler [32mINFO[0m Waiting for 120 seconds [0:02:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_for_status.lambda: self.exists)[0m
+2026-01-23T13:01:02.624418 ocp_resources Namespace [32mINFO[0m Status of Namespace cnv-tests-utilities is Active[0m
+2026-01-23T13:01:02.624594 timeout_sampler [32mINFO[0m Elapsed time: 9.083747863769531e-05 [0:00:00.000091][0m
+2026-01-23T13:01:02.625248 ocp_resources.resource [32mINFO[0m kind: OAuth api version: config.openshift.io/v1[0m
+2026-01-23T13:01:02.625649 ocp_resources.resource [32mINFO[0m kind: DaemonSet api version: apps/v1[0m
+2026-01-23T13:01:02.624826 conftest [32mINFO[0m Executing session fixture: skip_unprivileged_client[0m
+2026-01-23T13:01:02.624972 conftest [32mINFO[0m Executing session fixture: identity_provider_config[0m
+2026-01-23T13:01:02.625366 conftest [32mINFO[0m Executing session fixture: leftovers_cleanup[0m
+2026-01-23T13:01:02.625436 tests.conftest [32mINFO[0m Checking for leftover resources[0m
+2026-01-23T13:01:02.667446 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource OAuth cluster[0m
+2026-01-23T13:01:02.667587 ocp_resources OAuth [32mINFO[0m Update OAuth cluster:
+{'metadata': {'name': 'cluster'}, 'spec': {'identityProviders': [{'htpasswd': {'fileData': {'name': 'htpass-secret'}}, 'mappingMethod': 'claim', 'name': 'developer', 'type': 'HTPasswd'}], 'tokenConfig': {'accessTokenMaxAgeSeconds': 31536000}}}[0m
+2026-01-23T13:01:02.697828 conftest [32mINFO[0m Executing session fixture: artifactory_setup[0m
+2026-01-23T13:01:02.697949 tests.conftest [32mINFO[0m Checking for artifactory credentials:[0m
+2026-01-23T13:01:02.697992 tests.conftest [33mWARNING[0m Explicitly skipping artifactory setup check due to use of --skip-artifactory-check[0m
+2026-01-23T13:01:02.698066 conftest [32mINFO[0m Executing session fixture: os_path_environment[0m
+2026-01-23T13:01:02.698170 conftest [32mINFO[0m Executing session fixture: tmpdir_factory[0m
+2026-01-23T13:01:02.698243 conftest [32mINFO[0m Executing session fixture: bin_directory[0m
+2026-01-23T13:01:02.699072 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:02.698888 conftest [32mINFO[0m Executing session fixture: virtctl_binary[0m
+2026-01-23T13:01:02.718081 ocp_resources.resource [32mINFO[0m kind: ConsoleCLIDownload api version: console.openshift.io/v1[0m
+2026-01-23T13:01:02.722732 utilities.infra [32mINFO[0m Downloading archive using: url=https://hyperconverged-cluster-cli-download-openshift-cnv.apps-crc.testing/amd64/linux/virtctl.tar.gz[0m
+2026-01-23T13:01:02.829687 utilities.infra [32mINFO[0m Extract the downloaded archive.[0m
+2026-01-23T13:01:03.329991 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:03.328299 utilities.infra [32mINFO[0m Downloaded file: ['virtctl'][0m
+2026-01-23T13:01:03.329499 conftest [32mINFO[0m Executing session fixture: oc_binary[0m
+2026-01-23T13:01:03.336731 ocp_resources.resource [32mINFO[0m kind: ConsoleCLIDownload api version: console.openshift.io/v1[0m
+2026-01-23T13:01:03.344265 utilities.infra [32mINFO[0m Downloading archive using: url=https://downloads-openshift-console.apps-crc.testing/amd64/linux/oc.tar[0m
+2026-01-23T13:01:04.212837 utilities.infra [32mINFO[0m Extract the downloaded archive.[0m
+2026-01-23T13:01:04.308005 utilities.infra [32mINFO[0m Downloaded file: ['oc'][0m
+2026-01-23T13:01:04.324811 ocp_resources.resource [32mINFO[0m kind: ClusterVersion api version: config.openshift.io/v1[0m
+2026-01-23T13:01:04.324208 conftest [32mINFO[0m Executing session fixture: bin_directory_to_os_path[0m
+2026-01-23T13:01:04.324416 tests.conftest [32mINFO[0m Adding /tmp/pytest-EbaPapBG3AGtPCy3HpvJcL/bin0 to $PATH[0m
+2026-01-23T13:01:04.324601 conftest [32mINFO[0m Executing session fixture: openshift_current_version[0m
+2026-01-23T13:01:04.337063 conftest [32mINFO[0m Executing session fixture: hco_namespace[0m
+2026-01-23T13:01:04.339764 ocp_resources.resource [32mINFO[0m kind: Subscription api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.339432 conftest [32mINFO[0m Executing session fixture: csv_scope_session[0m
+2026-01-23T13:01:04.345248 ocp_resources.resource [32mINFO[0m kind: ClusterServiceVersion api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.371570 conftest [32mINFO[0m Executing session fixture: cnv_current_version[0m
+2026-01-23T13:01:04.413868 ocp_resources.resource [32mINFO[0m kind: Subscription api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.413559 conftest [32mINFO[0m Executing session fixture: cnv_subscription_scope_session[0m
+2026-01-23T13:01:04.418111 conftest [32mINFO[0m Executing session fixture: hco_image[0m
+2026-01-23T13:01:04.421130 ocp_resources.resource [32mINFO[0m kind: CatalogSource api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.427021 ocp_resources.resource [32mINFO[0m kind: StorageClass api version: storage.k8s.io/v1[0m
+2026-01-23T13:01:04.426849 conftest [32mINFO[0m Executing session fixture: cluster_storage_classes[0m
+2026-01-23T13:01:04.430199 ocp_resources.resource [32mINFO[0m kind: KubeVirt api version: kubevirt.io/v1[0m
+2026-01-23T13:01:04.429734 conftest [32mINFO[0m Executing session fixture: ocs_storage_class[0m
+2026-01-23T13:01:04.429914 conftest [32mINFO[0m Executing session fixture: ocs_current_version[0m
+2026-01-23T13:01:04.430033 conftest [32mINFO[0m Executing session fixture: kubevirt_resource_scope_session[0m
+2026-01-23T13:01:04.435054 ocp_resources.resource [32mINFO[0m kind: Network api version: config.openshift.io/v1[0m
+2026-01-23T13:01:04.434795 conftest [32mINFO[0m Executing session fixture: cluster_service_network[0m
+2026-01-23T13:01:04.437727 conftest [32mINFO[0m Executing session fixture: ipv6_supported_cluster[0m
+2026-01-23T13:01:04.437938 conftest [32mINFO[0m Executing session fixture: ipv4_supported_cluster[0m
+2026-01-23T13:01:04.438082 conftest [32mINFO[0m Executing session fixture: nodes[0m
+2026-01-23T13:01:04.442026 conftest [32mINFO[0m Executing session fixture: workers[0m
+2026-01-23T13:01:04.446827 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:04.446356 conftest [32mINFO[0m Executing session fixture: cnv_source[0m
+2026-01-23T13:01:04.446514 conftest [32mINFO[0m Executing session fixture: is_production_source[0m
+2026-01-23T13:01:04.446613 conftest [32mINFO[0m Executing session fixture: generated_pulled_secret[0m
+2026-01-23T13:01:04.464242 conftest [32mINFO[0m Executing session fixture: cnv_tests_utilities_service_account[0m
+2026-01-23T13:01:04.472952 ocp_resources ServiceAccount [32mINFO[0m Create ServiceAccount cnv-tests-sa[0m
+2026-01-23T13:01:04.473041 ocp_resources ServiceAccount [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'ServiceAccount', 'metadata': {'name': 'cnv-tests-sa', 'namespace': 'cnv-tests-utilities'}}[0m
+2026-01-23T13:01:04.608608 timeout_sampler [32mINFO[0m Waiting for 10 seconds [0:00:10], retry every 1 seconds. (Function: utilities.virt._get_image_json  Kwargs: {'cmd': 'oc image -o json info quay.io/openshift-cnv/qe-net-utils:latest --filter-by-os linux/amd64 --registry-config=/tmp/tmp7pzz835o-cnv-tests-pull-secret/pull-secrets.json'})[0m
+2026-01-23T13:01:04.608909 pyhelper_utils.shell [32mINFO[0m Running oc image -o json info quay.io/openshift-cnv/qe-net-utils:latest --filter-by-os linux/amd64 --registry-config=/tmp/tmp7pzz835o-cnv-tests-pull-secret/pull-secrets.json command[0m
+2026-01-23T13:01:04.608234 conftest [32mINFO[0m Executing session fixture: utility_daemonset[0m
+2026-01-23T13:01:07.112870 timeout_sampler [32mINFO[0m Elapsed time: 0.0002167224884033203 [0:00:00.000217][0m
+2026-01-23T13:01:07.127635 ocp_resources.resource [32mINFO[0m kind: DaemonSet api version: apps/v1 --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 2 times][0m
+2026-01-23T13:01:07.132997 ocp_resources DaemonSet [32mINFO[0m Create DaemonSet utility[0m
+2026-01-23T13:01:07.133104 ocp_resources DaemonSet [32mINFO[0m Posting {'apiVersion': 'apps/v1', 'kind': 'DaemonSet', 'metadata': {'annotations': {'deprecated.daemonset.template.generation': '0'}, 'creationTimestamp': None, 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'name': 'utility', 'namespace': 'cnv-tests-utilities'}, 'spec': {'revisionHistoryLimit': 10, 'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'creationTimestamp': None, 'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'containers': [{'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'imagePullPolicy': 'IfNotPresent', 'name': 'utility', 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'failureThreshold': 3, 'initialDelaySeconds': 5, 'periodSeconds': 5, 'successThreshold': 1, 'timeoutSeconds': 1}, 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'tty': True, 'volumeMounts': [{'mountPath': '/host', 'name': 'host'}, {'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount', 'name': 'kube-api-access-m5ch7', 'readOnly': True}, {'mountPath': '/host/run/openvswitch', 'name': 'ovs-run'}, {'mountPath': '/run/dbus/system_bus_socket', 'name': 'dbus-socket'}, {'mountPath': '/host/dev', 'name': 'dev'}, {'mountPath': '/host/etc', 'name': 'etc'}, {'mountPath': '/host/var', 'name': 'var'}]}], 'dnsPolicy': 'ClusterFirst', 'enableServiceLinks': True, 'hostNetwork': True, 'hostPID': True, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'preemptionPolicy': 'PreemptLowerPriority', 'priority': 0, 'restartPolicy': 'Always', 'schedulerName': 'default-scheduler', 'securityContext': {'privileged': True}, 'serviceAccount': 'cnv-tests-sa', 'serviceAccountName': 'cnv-tests-sa', 'terminationGracePeriodSeconds': 30, 'tolerations': [{'effect': 'NoSchedule', 'key': 'node-role.kubernetes.io/master', 'operator': 'Exists'}], 'volumes': [{'hostPath': {'path': '/', 'type': 'Directory'}, 'name': 'host'}, {'hostPath': {'path': '/run/openvswitch', 'type': ''}, 'name': 'ovs-run'}, {'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}, 'name': 'dbus-socket'}, {'hostPath': {'path': '/dev', 'type': 'Directory'}, 'name': 'dev'}, {'hostPath': {'path': '/etc', 'type': 'Directory'}, 'name': 'etc'}, {'hostPath': {'path': '/var', 'type': 'Directory'}, 'name': 'var'}, {'name': 'kube-api-access-m5ch7', 'projected': {'defaultMode': 420, 'sources': [{'serviceAccountToken': {'path': 'token'}}, {'configMap': {'items': [{'key': 'ca.crt', 'path': 'ca.crt'}], 'name': 'kube-root-ca.crt'}}, {'downwardAPI': {'items': [{'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}, 'path': 'namespace'}]}}, {'configMap': {'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}], 'name': 'openshift-service-ca.crt'}}]}}]}}, 'updateStrategy': {'type': 'OnDelete'}}}[0m
+2026-01-23T13:01:07.162835 ocp_resources DaemonSet [32mINFO[0m Wait for DaemonSet utility to deploy all desired pods[0m
+2026-01-23T13:01:07.162974 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: kubernetes.dynamic.client.get  Kwargs: {'field_selector': 'metadata.name==utility', 'namespace': 'cnv-tests-utilities'})[0m
+2026-01-23T13:01:16.246274 timeout_sampler [32mINFO[0m Elapsed time: 9.068963527679443 [0:00:09.068964][0m
+2026-01-23T13:01:16.246505 conftest [32mINFO[0m Executing session fixture: workers_utility_pods[0m
+2026-01-23T13:01:16.252892 conftest [32mINFO[0m Executing session fixture: workers_type[0m
+2026-01-23T13:01:16.257996 ocp_resources Pod [32mINFO[0m Execute ['chroot', '/host', 'bash', '-c', 'systemd-detect-virt'] on utility-9bthd (crc)[0m
+2026-01-23T13:01:16.290691 tests.conftest [32mINFO[0m Cluster workers are: virtual[0m
+2026-01-23T13:01:16.290946 conftest [32mINFO[0m Executing session fixture: nodes_cpu_architecture[0m
+2026-01-23T13:01:16.295969 pyhelper_utils.shell [32mINFO[0m Running virtctl version command[0m
+2026-01-23T13:01:16.295848 conftest [32mINFO[0m Executing session fixture: cluster_info[0m
+2026-01-23T13:01:16.312751 ocp_resources.resource [32mINFO[0m kind: Network api version: config.openshift.io/v1[0m
+2026-01-23T13:01:16.316509 ocp_resources.resource [32mINFO[0m kind: HyperConverged api version: hco.kubevirt.io/v1beta1[0m
+2026-01-23T13:01:16.315211 tests.conftest [32mINFO[0m 
+Cluster info:
+	Openshift version: 4.19.3
+	CNV version: 4.19.15
+	HCO image: registry.redhat.io/redhat/redhat-operator-index:v4.19
+	OCS version: None
+	CNI type: OVNKubernetes
+	Workers type: virtual
+	Cluster CPU Architecture: amd64
+	IPv4 cluster: True
+	IPv6 cluster: False
+	Virtctl version: 
+	Client Version: version.Info{GitVersion:"v1.5.3-44-g8f346f035a", GitCommit:"8f346f035ac3a5f25150f78f609e23e7c18437ff", GitTreeState:"clean", BuildDate:"2025-11-18T18:19:12Z", GoVersion:"go1.23.9 (Red Hat 1.23.9-1.module+el8.10.0+23162+9223a61a) X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+	Server Version: version.Info{GitVersion:"v1.5.3-44-g8f346f035a", GitCommit:"8f346f035ac3a5f25150f78f609e23e7c18437ff", GitTreeState:"clean", BuildDate:"2025-11-14T06:33:48Z", GoVersion:"go1.23.9 (Red Hat 1.23.9-1.el9_6) X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+[0m
+2026-01-23T13:01:16.315423 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-01-23T13:01:16.315579 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-01-23T13:01:16.315699 conftest [32mINFO[0m Executing module fixture: term_handler_scope_module[0m
+2026-01-23T13:01:16.315791 conftest [32mINFO[0m Executing session fixture: term_handler_scope_session[0m
+2026-01-23T13:01:16.315899 conftest [32mINFO[0m Executing session fixture: record_testsuite_property[0m
+2026-01-23T13:01:16.315984 conftest [32mINFO[0m Executing session fixture: junitxml_polarion[0m
+2026-01-23T13:01:16.316114 conftest [32mINFO[0m Executing session fixture: cluster_storage_classes_names[0m
+2026-01-23T13:01:16.316207 conftest [32mINFO[0m Executing session fixture: junitxml_plugin[0m
+2026-01-23T13:01:16.316287 conftest [32mINFO[0m Executing session fixture: hyperconverged_resource_scope_session[0m
+2026-01-23T13:01:16.319687 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+2026-01-23T13:01:16.319408 conftest [32mINFO[0m Executing session fixture: cluster_sanity_scope_session[0m
+2026-01-23T13:01:16.319546 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-01-23T13:01:16.319603 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-01-23T13:01:16.319649 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-01-23T13:01:16.322717 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-01-23T13:01:16.325651 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>})[0m
+2026-01-23T13:01:16.460910 timeout_sampler [32mINFO[0m Elapsed time: 9.131431579589844e-05 [0:00:00.000091][0m
+2026-01-23T13:01:16.461126 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:01:16.461048 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:01:26.479719 timeout_sampler [32mINFO[0m Elapsed time: 10.011855125427246 [0:00:10.011855][0m
+2026-01-23T13:01:26.480207 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+2026-01-23T13:01:26.479967 conftest [32mINFO[0m Executing module fixture: cluster_sanity_scope_module[0m
+2026-01-23T13:01:26.480076 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-01-23T13:01:26.480121 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-01-23T13:01:26.480162 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-01-23T13:01:26.483302 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-01-23T13:01:26.486472 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>})[0m
+2026-01-23T13:01:26.602897 timeout_sampler [32mINFO[0m Elapsed time: 9.465217590332031e-05 [0:00:00.000095][0m
+2026-01-23T13:01:26.603129 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:01:26.603051 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:01:36.621153 timeout_sampler [32mINFO[0m Elapsed time: 10.012304067611694 [0:00:10.012304][0m
+2026-01-23T13:01:36.621340 conftest [32mINFO[0m Executing session fixture: ssh_key_tmpdir_scope_session[0m
+2026-01-23T13:01:36.621753 conftest [32mINFO[0m Executing session fixture: generated_ssh_key_for_vm_access[0m
+2026-01-23T13:01:36.690883 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-01-23T13:01:36.691056 conftest [32mINFO[0m Executing session fixture: unprivileged_secret[0m
+2026-01-23T13:01:36.692974 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:36.698725 ocp_resources Secret [32mINFO[0m Create Secret htpass-secret-for-cnv-tests[0m
+2026-01-23T13:01:36.698809 ocp_resources Secret [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'htpass-secret-for-cnv-tests', 'namespace': 'openshift-config'}, 'data': '*******'}[0m
+2026-01-23T13:01:36.726018 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+2026-01-23T13:01:36.725865 conftest [32mINFO[0m Executing session fixture: identity_provider_with_htpasswd[0m
+2026-01-23T13:01:36.729756 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource OAuth cluster[0m
+2026-01-23T13:01:36.729864 ocp_resources OAuth [32mINFO[0m Update OAuth cluster:
+{'metadata': {'name': 'cluster'}, 'spec': {'identityProviders': [{'name': 'htpasswd_provider', 'mappingMethod': 'claim', 'type': 'HTPasswd', 'htpasswd': {'fileData': {'name': 'htpass-secret-for-cnv-tests'}}}], 'tokenConfig': {'accessTokenMaxAgeSeconds': 604800, 'accessTokenInactivityTimeout': None}}}[0m
+2026-01-23T13:01:36.748750 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:36.757341 ocp_resources.resource [32mINFO[0m kind: Deployment api version: apps/v1[0m
+2026-01-23T13:01:36.809945 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: tests.conftest.<locals>.lambda: dp.instance.status.conditions)[0m
+2026-01-23T13:01:36.809738 tests.conftest [32mINFO[0m Wait for oauth-openshift -> Type: Progressing -> Reason: ReplicaSetUpdated[0m
+2026-01-23T13:02:10.970547 timeout_sampler [32mINFO[0m Elapsed time: 34.1553521156311 [0:00:34.155352][0m
+2026-01-23T13:02:10.970762 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: tests.conftest.<locals>.lambda: dp.instance.status.conditions)[0m
+2026-01-23T13:02:10.970676 tests.conftest [32mINFO[0m Wait for oauth-openshift -> Type: Progressing -> Reason: NewReplicaSetAvailable[0m
+2026-01-23T13:02:38.108479 timeout_sampler [32mINFO[0m Elapsed time: 27.135077714920044 [0:00:27.135078][0m
+2026-01-23T13:02:38.108679 conftest [32mINFO[0m Executing session fixture: kubeconfig_export_path[0m
+2026-01-23T13:02:38.108803 conftest [32mINFO[0m Executing session fixture: exported_kubeconfig[0m
+2026-01-23T13:02:38.109315 tests.conftest [32mINFO[0m Setting KUBECONFIG dir for this run to point to: /tmp/tmpbokn82aj-cnv-tests-kubeconfig[0m
+2026-01-23T13:02:38.109381 tests.conftest [32mINFO[0m Copy KUBECONFIG to /tmp/tmpbokn82aj-cnv-tests-kubeconfig/kubeconfig[0m
+2026-01-23T13:02:38.109624 tests.conftest [32mINFO[0m Set: KUBECONFIG=/tmp/tmpbokn82aj-cnv-tests-kubeconfig/kubeconfig[0m
+2026-01-23T13:02:38.109724 conftest [32mINFO[0m Executing session fixture: unprivileged_client[0m
+2026-01-23T13:02:38.164995 timeout_sampler [32mINFO[0m Waiting for 60 seconds [0:01:00], retry every 3 seconds. (Function: subprocess.Popen  Kwargs: {'args': 'oc login https://api.crc.testing:6443 -u unprivileged-user -p unprivileged-password', 'shell': True, 'stdout': -1, 'stderr': -1})[0m
+2026-01-23T13:02:38.164831 utilities.infra [32mINFO[0m Trying to login to account[0m
+2026-01-23T13:02:38.351779 timeout_sampler [32mINFO[0m Elapsed time: 0.00016236305236816406 [0:00:00.000162][0m
+2026-01-23T13:02:38.355650 timeout_sampler [32mINFO[0m Waiting for 60 seconds [0:01:00], retry every 3 seconds. (Function: subprocess.Popen  Kwargs: {'args': 'oc login https://api.crc.testing:6443 -u kubeadmin', 'shell': True, 'stdout': -1, 'stderr': -1})[0m
+2026-01-23T13:02:38.351632 utilities.infra [32mINFO[0m Login - success[0m
+2026-01-23T13:02:38.355560 utilities.infra [32mINFO[0m Trying to login to account[0m
+2026-01-23T13:02:38.430078 timeout_sampler [32mINFO[0m Elapsed time: 0.00017523765563964844 [0:00:00.000175][0m
+2026-01-23T13:02:38.430439 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:02:38.429894 utilities.infra [32mINFO[0m Login - success[0m
+2026-01-23T13:02:38.436481 conftest [32mINFO[0m Executing function fixture: hyperconverged_resource_scope_function[0m
+2026-01-23T13:02:38.439646 conftest [32mINFO[0m Executing function fixture: common_instancetypes_list[0m
+2026-01-23T13:02:38.445563 ocp_resources.resource [32mINFO[0m kind: VirtualMachineClusterInstancetype api version: instancetype.kubevirt.io/v1beta1[0m
+----------------------------- Captured stderr call -----------------------------
+2026-01-23T13:02:38.457556 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-01-23T13:02:38.457401 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 1: Verify common-instancetypes are deployed by default[0m
+2026-01-23T13:02:38.457457 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Found 55 common instancetypes before disabling[0m
+2026-01-23T13:02:38.457490 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 2: Edit HCO CR to disable common instancetypes deployment[0m
+2026-01-23T13:02:38.457521 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Setting commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:02:38.460719 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-01-23T13:02:38.460804 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': 'Disabled'}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-01-23T13:02:38.475460 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:02:38.475367 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:02:48.498049 timeout_sampler [32mINFO[0m Elapsed time: 10.016639232635498 [0:00:10.016639][0m
+2026-01-23T13:02:48.498249 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:02:48.498141 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 3: Wait for HCO reconciliation[0m
+2026-01-23T13:02:48.498205 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:02:58.515216 timeout_sampler [32mINFO[0m Elapsed time: 10.010903358459473 [0:00:10.010903][0m
+2026-01-23T13:02:58.515413 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR)[0m
+2026-01-23T13:02:58.515640 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:02:58.515312 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 4: Verify all common-instancetype resources are removed[0m
+2026-01-23T13:02:58.515368 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Waiting for common instancetypes to be deleted[0m
+_ 1 of 5 completed, 0 Pass, 1 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py F [ 40%]
+
+
+_ TestCommonInstancetypesDeploymentEnable.test_enable_common_instancetypes_deployment _
+
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentEnable object at 0x7f468a54d1d0>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f4688c625d0>
+
+    @pytest.mark.polarion("CNV-61256-02")
+    def test_enable_common_instancetypes_deployment(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+    ):
+        """
+        Test Scenario 2: Enable Common-Instancetypes
+    
+        Steps:
+            1. Disable common-instancetypes first
+            2. Verify common-instancetypes not deployed
+            3. Edit HCO CR: set commonInstancetypesDeployment: Enabled
+            4. Wait for HCO reconciliation
+            5. Check for common-instancetype resources
+    
+        Expected Result:
+            Common-instancetype resources are deployed
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: critical
+            initialEstimate: 1/4h
+            testSteps:
+                1. Disable common-instancetypes
+                2. Verify common-instancetypes not deployed
+                3. Edit HCO CR: set commonInstancetypesDeployment: Enabled
+                4. Wait for HCO reconciliation
+                5. Check for common-instancetype resources
+            expectedResults:
+                1. Common-instancetypes disabled successfully
+                2. No common-instancetypes present
+                3. HCO CR updated successfully
+                4. HCO reconciliation completes
+                5. Common-instancetype resources deployed
+        """
+        LOGGER.info("Step 1: Disable common-instancetypes first")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 2: Verify common-instancetypes are not deployed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f4688c5c050>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentDisable object at 0x7f468a54c190>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f4689030190>
+common_instancetypes_list = [<ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4688fe86e0>, <ocp..., <ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4689030b90>, ...]
+
+    @pytest.mark.polarion("CNV-61256-01")
+    def test_disable_common_instancetypes_deployment(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+        common_instancetypes_list,
+    ):
+        """
+        Test Scenario 1: Disable Common-Instancetypes
+    
+        Steps:
+            1. Verify common-instancetypes are deployed (default)
+            2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+            3. Wait for HCO reconciliation
+            4. Check for common-instancetype resources
+    
+        Expected Result:
+            All common-instancetype resources are removed
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: critical
+            initialEstimate: 1/4h
+            testSteps:
+                1. Verify common-instancetypes deployed (default)
+                2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+                3. Wait for HCO reconciliation
+                4. Check for common-instancetype resources
+            expectedResults:
+                1. Common-instancetypes are present
+                2. HCO CR updated successfully
+                3. HCO reconciliation completes
+                4. All common-instancetype resources removed
+        """
+        LOGGER.info("Step 1: Verify common-instancetypes are deployed by default")
+        assert common_instancetypes_list, "No common instancetypes found before disabling"
+        initial_count = len(common_instancetypes_list)
+        LOGGER.info(f"Found {initial_count} common instancetypes before disabling")
+    
+        LOGGER.info("Step 2: Edit HCO CR to disable common instancetypes deployment")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+    
+        LOGGER.info("Step 3: Wait for HCO reconciliation")
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 4: Verify all common-instancetype resources are removed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:91: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f4688b5d9f0>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+
+------------------------------------- test_enable_common_instancetypes_deployment -------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-01-23T13:07:59.829756 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-01-23T13:07:59.829881 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-01-23T13:07:59.830017 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-01-23T13:07:59.830116 conftest [32mINFO[0m Executing function fixture: hyperconverged_resource_scope_function[0m
+----------------------------- Captured stderr call -----------------------------
+2026-01-23T13:07:59.836521 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 59 times][0m
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-01-23T13:07:59.836410 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 1: Disable common-instancetypes first[0m
+2026-01-23T13:07:59.836466 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Setting commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:07:59.841302 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-01-23T13:07:59.857267 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:07:59.857139 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:08:09.881435 timeout_sampler [32mINFO[0m Elapsed time: 10.01229977607727 [0:00:10.012300][0m
+2026-01-23T13:08:09.881674 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:08:09.881595 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:08:19.898790 timeout_sampler [32mINFO[0m Elapsed time: 10.010302782058716 [0:00:10.010303][0m
+2026-01-23T13:08:19.899063 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR)[0m
+2026-01-23T13:08:19.898916 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 2: Verify common-instancetypes are not deployed[0m
+2026-01-23T13:08:19.899440 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:08:19.898996 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Waiting for common instancetypes to be deleted[0m
+_ 2 of 5 completed, 0 Pass, 2 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py . [ 60%]
+
+_ 3 of 5 completed, 1 Pass, 2 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py F [ 80%]
+
+
+_ TestCommonInstancetypesDeploymentPersistence.test_setting_persistence_across_reconciliation _
+
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentPersistence object at 0x7f468a54d090>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f468a54f110>
+
+    @pytest.mark.polarion("CNV-61256-04")
+    def test_setting_persistence_across_reconciliation(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+    ):
+        """
+        Test Scenario 4: Setting Persistence
+    
+        Steps:
+            1. Set commonInstancetypesDeployment: Disabled
+            2. Verify instancetypes are removed
+            3. Trigger HCO reconciliation by editing another field
+            4. Verify commonInstancetypesDeployment remains Disabled
+            5. Verify instancetypes remain disabled
+    
+        Expected Result:
+            Setting persists across reconciliations
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: high
+            initialEstimate: 1/4h
+            testSteps:
+                1. Set commonInstancetypesDeployment: Disabled
+                2. Verify setting and instancetypes removed
+                3. Trigger HCO reconciliation
+                4. Verify setting persists
+            expectedResults:
+                1. Setting updated successfully
+                2. Instancetypes removed
+                3. Reconciliation completes
+                4. Setting persists, instancetypes remain disabled
+        """
+        LOGGER.info("Step 1: Set commonInstancetypesDeployment to Disabled")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 2: Verify instancetypes are removed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f46839dc5f0>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+
+------------------------------------ test_setting_persistence_across_reconciliation ------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-01-23T13:13:21.231620 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-01-23T13:13:21.231713 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-01-23T13:13:21.231877 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-01-23T13:13:21.231979 conftest [32mINFO[0m Executing function fixture: hyperconverged_resource_scope_function[0m
+----------------------------- Captured stderr call -----------------------------
+2026-01-23T13:13:21.235370 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-01-23T13:13:21.235266 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 1: Set commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:13:21.235321 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Setting commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:13:21.251067 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-01-23T13:13:21.269398 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:13:21.269274 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:13:31.289009 timeout_sampler [32mINFO[0m Elapsed time: 10.013350248336792 [0:00:10.013350][0m
+2026-01-23T13:13:31.289223 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:13:31.289125 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:13:41.315101 timeout_sampler [32mINFO[0m Elapsed time: 10.013458490371704 [0:00:10.013458][0m
+2026-01-23T13:13:41.315314 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR)[0m
+2026-01-23T13:13:41.315537 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:13:41.315202 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 2: Verify instancetypes are removed[0m
+2026-01-23T13:13:41.315264 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Waiting for common instancetypes to be deleted[0m
+_ 4 of 5 completed, 1 Pass, 3 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+
+tests/deprecated_api/test_deprecation_audit_logs.py .
+_ 5 of 5 completed, 2 Pass, 3 Fail, 0 Skip, 0 XPass, 0 XFail, 0 Error, 0 ReRun _
+                                                                         [100%]====== 3 failed, 2 passed, 1 deselected, 8 warnings in 1135.06s (0:18:55) ======
+
+=================================== FAILURES ===================================
+_ TestCommonInstancetypesDeploymentDisable.test_disable_common_instancetypes_deployment _
+
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentDisable object at 0x7f468a54c190>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f4689030190>
+common_instancetypes_list = [<ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4688fe86e0>, <ocp..., <ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4689030b90>, ...]
+
+    @pytest.mark.polarion("CNV-61256-01")
+    def test_disable_common_instancetypes_deployment(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+        common_instancetypes_list,
+    ):
+        """
+        Test Scenario 1: Disable Common-Instancetypes
+    
+        Steps:
+            1. Verify common-instancetypes are deployed (default)
+            2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+            3. Wait for HCO reconciliation
+            4. Check for common-instancetype resources
+    
+        Expected Result:
+            All common-instancetype resources are removed
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: critical
+            initialEstimate: 1/4h
+            testSteps:
+                1. Verify common-instancetypes deployed (default)
+                2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+                3. Wait for HCO reconciliation
+                4. Check for common-instancetype resources
+            expectedResults:
+                1. Common-instancetypes are present
+                2. HCO CR updated successfully
+                3. HCO reconciliation completes
+                4. All common-instancetype resources removed
+        """
+        LOGGER.info("Step 1: Verify common-instancetypes are deployed by default")
+        assert common_instancetypes_list, "No common instancetypes found before disabling"
+        initial_count = len(common_instancetypes_list)
+        LOGGER.info(f"Found {initial_count} common instancetypes before disabling")
+    
+        LOGGER.info("Step 2: Edit HCO CR to disable common instancetypes deployment")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+    
+        LOGGER.info("Step 3: Wait for HCO reconciliation")
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 4: Verify all common-instancetype resources are removed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:91: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f4688b5d9f0>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+
+------------------------------------- test_disable_common_instancetypes_deployment -------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-01-23T13:01:02.516376 conftest [32mINFO[0m Executing session fixture: admin_client[0m
+2026-01-23T13:01:02.516604 conftest [32mINFO[0m Executing session fixture: pytestconfig[0m
+2026-01-23T13:01:02.516747 conftest [32mINFO[0m Executing session fixture: installing_cnv[0m
+2026-01-23T13:01:02.516848 conftest [32mINFO[0m Executing session fixture: cnv_tests_utilities_namespace[0m
+2026-01-23T13:01:02.540944 ocp_resources Namespace [32mINFO[0m Create Namespace cnv-tests-utilities[0m
+2026-01-23T13:01:02.541071 ocp_resources Namespace [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Namespace', 'metadata': {'name': 'cnv-tests-utilities', 'labels': {'pod-security.kubernetes.io/enforce': 'privileged', 'security.openshift.io/scc.podSecurityLabelSync': 'false'}}, 'spec': {}}[0m
+2026-01-23T13:01:02.589846 ocp_resources Namespace [32mINFO[0m Wait for Namespace cnv-tests-utilities status to be Active[0m
+2026-01-23T13:01:02.590001 timeout_sampler [32mINFO[0m Waiting for 120 seconds [0:02:00], retry every 1 seconds. (Function: ocp_resources.resource.wait_for_status.lambda: self.exists)[0m
+2026-01-23T13:01:02.624418 ocp_resources Namespace [32mINFO[0m Status of Namespace cnv-tests-utilities is Active[0m
+2026-01-23T13:01:02.624594 timeout_sampler [32mINFO[0m Elapsed time: 9.083747863769531e-05 [0:00:00.000091][0m
+2026-01-23T13:01:02.625248 ocp_resources.resource [32mINFO[0m kind: OAuth api version: config.openshift.io/v1[0m
+2026-01-23T13:01:02.625649 ocp_resources.resource [32mINFO[0m kind: DaemonSet api version: apps/v1[0m
+2026-01-23T13:01:02.624826 conftest [32mINFO[0m Executing session fixture: skip_unprivileged_client[0m
+2026-01-23T13:01:02.624972 conftest [32mINFO[0m Executing session fixture: identity_provider_config[0m
+2026-01-23T13:01:02.625366 conftest [32mINFO[0m Executing session fixture: leftovers_cleanup[0m
+2026-01-23T13:01:02.625436 tests.conftest [32mINFO[0m Checking for leftover resources[0m
+2026-01-23T13:01:02.667446 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource OAuth cluster[0m
+2026-01-23T13:01:02.667587 ocp_resources OAuth [32mINFO[0m Update OAuth cluster:
+{'metadata': {'name': 'cluster'}, 'spec': {'identityProviders': [{'htpasswd': {'fileData': {'name': 'htpass-secret'}}, 'mappingMethod': 'claim', 'name': 'developer', 'type': 'HTPasswd'}], 'tokenConfig': {'accessTokenMaxAgeSeconds': 31536000}}}[0m
+2026-01-23T13:01:02.697828 conftest [32mINFO[0m Executing session fixture: artifactory_setup[0m
+2026-01-23T13:01:02.697949 tests.conftest [32mINFO[0m Checking for artifactory credentials:[0m
+2026-01-23T13:01:02.697992 tests.conftest [33mWARNING[0m Explicitly skipping artifactory setup check due to use of --skip-artifactory-check[0m
+2026-01-23T13:01:02.698066 conftest [32mINFO[0m Executing session fixture: os_path_environment[0m
+2026-01-23T13:01:02.698170 conftest [32mINFO[0m Executing session fixture: tmpdir_factory[0m
+2026-01-23T13:01:02.698243 conftest [32mINFO[0m Executing session fixture: bin_directory[0m
+2026-01-23T13:01:02.699072 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:02.698888 conftest [32mINFO[0m Executing session fixture: virtctl_binary[0m
+2026-01-23T13:01:02.718081 ocp_resources.resource [32mINFO[0m kind: ConsoleCLIDownload api version: console.openshift.io/v1[0m
+2026-01-23T13:01:02.722732 utilities.infra [32mINFO[0m Downloading archive using: url=https://hyperconverged-cluster-cli-download-openshift-cnv.apps-crc.testing/amd64/linux/virtctl.tar.gz[0m
+2026-01-23T13:01:02.829687 utilities.infra [32mINFO[0m Extract the downloaded archive.[0m
+2026-01-23T13:01:03.329991 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:03.328299 utilities.infra [32mINFO[0m Downloaded file: ['virtctl'][0m
+2026-01-23T13:01:03.329499 conftest [32mINFO[0m Executing session fixture: oc_binary[0m
+2026-01-23T13:01:03.336731 ocp_resources.resource [32mINFO[0m kind: ConsoleCLIDownload api version: console.openshift.io/v1[0m
+2026-01-23T13:01:03.344265 utilities.infra [32mINFO[0m Downloading archive using: url=https://downloads-openshift-console.apps-crc.testing/amd64/linux/oc.tar[0m
+2026-01-23T13:01:04.212837 utilities.infra [32mINFO[0m Extract the downloaded archive.[0m
+2026-01-23T13:01:04.308005 utilities.infra [32mINFO[0m Downloaded file: ['oc'][0m
+2026-01-23T13:01:04.324811 ocp_resources.resource [32mINFO[0m kind: ClusterVersion api version: config.openshift.io/v1[0m
+2026-01-23T13:01:04.324208 conftest [32mINFO[0m Executing session fixture: bin_directory_to_os_path[0m
+2026-01-23T13:01:04.324416 tests.conftest [32mINFO[0m Adding /tmp/pytest-EbaPapBG3AGtPCy3HpvJcL/bin0 to $PATH[0m
+2026-01-23T13:01:04.324601 conftest [32mINFO[0m Executing session fixture: openshift_current_version[0m
+2026-01-23T13:01:04.337063 conftest [32mINFO[0m Executing session fixture: hco_namespace[0m
+2026-01-23T13:01:04.339764 ocp_resources.resource [32mINFO[0m kind: Subscription api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.339432 conftest [32mINFO[0m Executing session fixture: csv_scope_session[0m
+2026-01-23T13:01:04.345248 ocp_resources.resource [32mINFO[0m kind: ClusterServiceVersion api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.371570 conftest [32mINFO[0m Executing session fixture: cnv_current_version[0m
+2026-01-23T13:01:04.413868 ocp_resources.resource [32mINFO[0m kind: Subscription api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.413559 conftest [32mINFO[0m Executing session fixture: cnv_subscription_scope_session[0m
+2026-01-23T13:01:04.418111 conftest [32mINFO[0m Executing session fixture: hco_image[0m
+2026-01-23T13:01:04.421130 ocp_resources.resource [32mINFO[0m kind: CatalogSource api version: operators.coreos.com/v1alpha1[0m
+2026-01-23T13:01:04.427021 ocp_resources.resource [32mINFO[0m kind: StorageClass api version: storage.k8s.io/v1[0m
+2026-01-23T13:01:04.426849 conftest [32mINFO[0m Executing session fixture: cluster_storage_classes[0m
+2026-01-23T13:01:04.430199 ocp_resources.resource [32mINFO[0m kind: KubeVirt api version: kubevirt.io/v1[0m
+2026-01-23T13:01:04.429734 conftest [32mINFO[0m Executing session fixture: ocs_storage_class[0m
+2026-01-23T13:01:04.429914 conftest [32mINFO[0m Executing session fixture: ocs_current_version[0m
+2026-01-23T13:01:04.430033 conftest [32mINFO[0m Executing session fixture: kubevirt_resource_scope_session[0m
+2026-01-23T13:01:04.435054 ocp_resources.resource [32mINFO[0m kind: Network api version: config.openshift.io/v1[0m
+2026-01-23T13:01:04.434795 conftest [32mINFO[0m Executing session fixture: cluster_service_network[0m
+2026-01-23T13:01:04.437727 conftest [32mINFO[0m Executing session fixture: ipv6_supported_cluster[0m
+2026-01-23T13:01:04.437938 conftest [32mINFO[0m Executing session fixture: ipv4_supported_cluster[0m
+2026-01-23T13:01:04.438082 conftest [32mINFO[0m Executing session fixture: nodes[0m
+2026-01-23T13:01:04.442026 conftest [32mINFO[0m Executing session fixture: workers[0m
+2026-01-23T13:01:04.446827 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:04.446356 conftest [32mINFO[0m Executing session fixture: cnv_source[0m
+2026-01-23T13:01:04.446514 conftest [32mINFO[0m Executing session fixture: is_production_source[0m
+2026-01-23T13:01:04.446613 conftest [32mINFO[0m Executing session fixture: generated_pulled_secret[0m
+2026-01-23T13:01:04.464242 conftest [32mINFO[0m Executing session fixture: cnv_tests_utilities_service_account[0m
+2026-01-23T13:01:04.472952 ocp_resources ServiceAccount [32mINFO[0m Create ServiceAccount cnv-tests-sa[0m
+2026-01-23T13:01:04.473041 ocp_resources ServiceAccount [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'ServiceAccount', 'metadata': {'name': 'cnv-tests-sa', 'namespace': 'cnv-tests-utilities'}}[0m
+2026-01-23T13:01:04.608608 timeout_sampler [32mINFO[0m Waiting for 10 seconds [0:00:10], retry every 1 seconds. (Function: utilities.virt._get_image_json  Kwargs: {'cmd': 'oc image -o json info quay.io/openshift-cnv/qe-net-utils:latest --filter-by-os linux/amd64 --registry-config=/tmp/tmp7pzz835o-cnv-tests-pull-secret/pull-secrets.json'})[0m
+2026-01-23T13:01:04.608909 pyhelper_utils.shell [32mINFO[0m Running oc image -o json info quay.io/openshift-cnv/qe-net-utils:latest --filter-by-os linux/amd64 --registry-config=/tmp/tmp7pzz835o-cnv-tests-pull-secret/pull-secrets.json command[0m
+2026-01-23T13:01:04.608234 conftest [32mINFO[0m Executing session fixture: utility_daemonset[0m
+2026-01-23T13:01:07.112870 timeout_sampler [32mINFO[0m Elapsed time: 0.0002167224884033203 [0:00:00.000217][0m
+2026-01-23T13:01:07.127635 ocp_resources.resource [32mINFO[0m kind: DaemonSet api version: apps/v1 --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 2 times][0m
+2026-01-23T13:01:07.132997 ocp_resources DaemonSet [32mINFO[0m Create DaemonSet utility[0m
+2026-01-23T13:01:07.133104 ocp_resources DaemonSet [32mINFO[0m Posting {'apiVersion': 'apps/v1', 'kind': 'DaemonSet', 'metadata': {'annotations': {'deprecated.daemonset.template.generation': '0'}, 'creationTimestamp': None, 'labels': {'cnv-test': 'utility', 'tier': 'node'}, 'name': 'utility', 'namespace': 'cnv-tests-utilities'}, 'spec': {'revisionHistoryLimit': 10, 'selector': {'matchLabels': {'cnv-test': 'utility', 'tier': 'node'}}, 'template': {'metadata': {'creationTimestamp': None, 'labels': {'cnv-test': 'utility', 'tier': 'node'}}, 'spec': {'containers': [{'command': ['/bin/bash', '-c', 'echo ok > /tmp/healthy && sleep INF'], 'image': 'quay.io/openshift-cnv/qe-net-utils:latest@sha256:2c8e11ac0f0b36553bed603c1c67dccb703d7059ccbcf8c91e3a35c99719ce20', 'imagePullPolicy': 'IfNotPresent', 'name': 'utility', 'readinessProbe': {'exec': {'command': ['cat', '/tmp/healthy']}, 'failureThreshold': 3, 'initialDelaySeconds': 5, 'periodSeconds': 5, 'successThreshold': 1, 'timeoutSeconds': 1}, 'resources': {'limits': {'cpu': '100m', 'memory': '50Mi'}, 'requests': {'cpu': '100m', 'memory': '50Mi'}}, 'securityContext': {'privileged': True, 'runAsUser': 0}, 'stdin': True, 'stdinOnce': True, 'terminationMessagePath': '/dev/termination-log', 'terminationMessagePolicy': 'File', 'tty': True, 'volumeMounts': [{'mountPath': '/host', 'name': 'host'}, {'mountPath': '/var/run/secrets/kubernetes.io/serviceaccount', 'name': 'kube-api-access-m5ch7', 'readOnly': True}, {'mountPath': '/host/run/openvswitch', 'name': 'ovs-run'}, {'mountPath': '/run/dbus/system_bus_socket', 'name': 'dbus-socket'}, {'mountPath': '/host/dev', 'name': 'dev'}, {'mountPath': '/host/etc', 'name': 'etc'}, {'mountPath': '/host/var', 'name': 'var'}]}], 'dnsPolicy': 'ClusterFirst', 'enableServiceLinks': True, 'hostNetwork': True, 'hostPID': True, 'imagePullSecrets': [{'name': 'default-dockercfg-xrlbh'}], 'preemptionPolicy': 'PreemptLowerPriority', 'priority': 0, 'restartPolicy': 'Always', 'schedulerName': 'default-scheduler', 'securityContext': {'privileged': True}, 'serviceAccount': 'cnv-tests-sa', 'serviceAccountName': 'cnv-tests-sa', 'terminationGracePeriodSeconds': 30, 'tolerations': [{'effect': 'NoSchedule', 'key': 'node-role.kubernetes.io/master', 'operator': 'Exists'}], 'volumes': [{'hostPath': {'path': '/', 'type': 'Directory'}, 'name': 'host'}, {'hostPath': {'path': '/run/openvswitch', 'type': ''}, 'name': 'ovs-run'}, {'hostPath': {'path': '/run/dbus/system_bus_socket', 'type': 'Socket'}, 'name': 'dbus-socket'}, {'hostPath': {'path': '/dev', 'type': 'Directory'}, 'name': 'dev'}, {'hostPath': {'path': '/etc', 'type': 'Directory'}, 'name': 'etc'}, {'hostPath': {'path': '/var', 'type': 'Directory'}, 'name': 'var'}, {'name': 'kube-api-access-m5ch7', 'projected': {'defaultMode': 420, 'sources': [{'serviceAccountToken': {'path': 'token'}}, {'configMap': {'items': [{'key': 'ca.crt', 'path': 'ca.crt'}], 'name': 'kube-root-ca.crt'}}, {'downwardAPI': {'items': [{'fieldRef': {'apiVersion': 'v1', 'fieldPath': 'metadata.namespace'}, 'path': 'namespace'}]}}, {'configMap': {'items': [{'key': 'service-ca.crt', 'path': 'service-ca.crt'}], 'name': 'openshift-service-ca.crt'}}]}}]}}, 'updateStrategy': {'type': 'OnDelete'}}}[0m
+2026-01-23T13:01:07.162835 ocp_resources DaemonSet [32mINFO[0m Wait for DaemonSet utility to deploy all desired pods[0m
+2026-01-23T13:01:07.162974 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: kubernetes.dynamic.client.get  Kwargs: {'field_selector': 'metadata.name==utility', 'namespace': 'cnv-tests-utilities'})[0m
+2026-01-23T13:01:16.246274 timeout_sampler [32mINFO[0m Elapsed time: 9.068963527679443 [0:00:09.068964][0m
+2026-01-23T13:01:16.246505 conftest [32mINFO[0m Executing session fixture: workers_utility_pods[0m
+2026-01-23T13:01:16.252892 conftest [32mINFO[0m Executing session fixture: workers_type[0m
+2026-01-23T13:01:16.257996 ocp_resources Pod [32mINFO[0m Execute ['chroot', '/host', 'bash', '-c', 'systemd-detect-virt'] on utility-9bthd (crc)[0m
+2026-01-23T13:01:16.290691 tests.conftest [32mINFO[0m Cluster workers are: virtual[0m
+2026-01-23T13:01:16.290946 conftest [32mINFO[0m Executing session fixture: nodes_cpu_architecture[0m
+2026-01-23T13:01:16.295969 pyhelper_utils.shell [32mINFO[0m Running virtctl version command[0m
+2026-01-23T13:01:16.295848 conftest [32mINFO[0m Executing session fixture: cluster_info[0m
+2026-01-23T13:01:16.312751 ocp_resources.resource [32mINFO[0m kind: Network api version: config.openshift.io/v1[0m
+2026-01-23T13:01:16.316509 ocp_resources.resource [32mINFO[0m kind: HyperConverged api version: hco.kubevirt.io/v1beta1[0m
+2026-01-23T13:01:16.315211 tests.conftest [32mINFO[0m 
+Cluster info:
+	Openshift version: 4.19.3
+	CNV version: 4.19.15
+	HCO image: registry.redhat.io/redhat/redhat-operator-index:v4.19
+	OCS version: None
+	CNI type: OVNKubernetes
+	Workers type: virtual
+	Cluster CPU Architecture: amd64
+	IPv4 cluster: True
+	IPv6 cluster: False
+	Virtctl version: 
+	Client Version: version.Info{GitVersion:"v1.5.3-44-g8f346f035a", GitCommit:"8f346f035ac3a5f25150f78f609e23e7c18437ff", GitTreeState:"clean", BuildDate:"2025-11-18T18:19:12Z", GoVersion:"go1.23.9 (Red Hat 1.23.9-1.module+el8.10.0+23162+9223a61a) X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+	Server Version: version.Info{GitVersion:"v1.5.3-44-g8f346f035a", GitCommit:"8f346f035ac3a5f25150f78f609e23e7c18437ff", GitTreeState:"clean", BuildDate:"2025-11-14T06:33:48Z", GoVersion:"go1.23.9 (Red Hat 1.23.9-1.el9_6) X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+[0m
+2026-01-23T13:01:16.315423 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-01-23T13:01:16.315579 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-01-23T13:01:16.315699 conftest [32mINFO[0m Executing module fixture: term_handler_scope_module[0m
+2026-01-23T13:01:16.315791 conftest [32mINFO[0m Executing session fixture: term_handler_scope_session[0m
+2026-01-23T13:01:16.315899 conftest [32mINFO[0m Executing session fixture: record_testsuite_property[0m
+2026-01-23T13:01:16.315984 conftest [32mINFO[0m Executing session fixture: junitxml_polarion[0m
+2026-01-23T13:01:16.316114 conftest [32mINFO[0m Executing session fixture: cluster_storage_classes_names[0m
+2026-01-23T13:01:16.316207 conftest [32mINFO[0m Executing session fixture: junitxml_plugin[0m
+2026-01-23T13:01:16.316287 conftest [32mINFO[0m Executing session fixture: hyperconverged_resource_scope_session[0m
+2026-01-23T13:01:16.319687 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+2026-01-23T13:01:16.319408 conftest [32mINFO[0m Executing session fixture: cluster_sanity_scope_session[0m
+2026-01-23T13:01:16.319546 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-01-23T13:01:16.319603 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-01-23T13:01:16.319649 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-01-23T13:01:16.322717 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-01-23T13:01:16.325651 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>})[0m
+2026-01-23T13:01:16.460910 timeout_sampler [32mINFO[0m Elapsed time: 9.131431579589844e-05 [0:00:00.000091][0m
+2026-01-23T13:01:16.461126 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:01:16.461048 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:01:26.479719 timeout_sampler [32mINFO[0m Elapsed time: 10.011855125427246 [0:00:10.011855][0m
+2026-01-23T13:01:26.480207 ocp_utilities.infra [32mINFO[0m Verify all nodes are in a healthy condition.[0m
+2026-01-23T13:01:26.479967 conftest [32mINFO[0m Executing module fixture: cluster_sanity_scope_module[0m
+2026-01-23T13:01:26.480076 utilities.infra [32mINFO[0m Running cluster sanity. (To skip cluster sanity check pass --cluster-sanity-skip-check to pytest)[0m
+2026-01-23T13:01:26.480121 utilities.infra [32mINFO[0m Check storage classes sanity. (To skip storage class sanity check pass --cluster-sanity-skip-storage-check to pytest)[0m
+2026-01-23T13:01:26.480162 utilities.infra [32mINFO[0m Check nodes sanity. (To skip nodes sanity check pass --cluster-sanity-skip-nodes-check to pytest)[0m
+2026-01-23T13:01:26.483302 ocp_utilities.infra [32mINFO[0m Verify all nodes are schedulable.[0m
+2026-01-23T13:01:26.486472 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: utilities.infra.get_pods  Kwargs: {'dyn_client': <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>, 'namespace': <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>})[0m
+2026-01-23T13:01:26.602897 timeout_sampler [32mINFO[0m Elapsed time: 9.465217590332031e-05 [0:00:00.000095][0m
+2026-01-23T13:01:26.603129 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:01:26.603051 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:01:36.621153 timeout_sampler [32mINFO[0m Elapsed time: 10.012304067611694 [0:00:10.012304][0m
+2026-01-23T13:01:36.621340 conftest [32mINFO[0m Executing session fixture: ssh_key_tmpdir_scope_session[0m
+2026-01-23T13:01:36.621753 conftest [32mINFO[0m Executing session fixture: generated_ssh_key_for_vm_access[0m
+2026-01-23T13:01:36.690883 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-01-23T13:01:36.691056 conftest [32mINFO[0m Executing session fixture: unprivileged_secret[0m
+2026-01-23T13:01:36.692974 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:36.698725 ocp_resources Secret [32mINFO[0m Create Secret htpass-secret-for-cnv-tests[0m
+2026-01-23T13:01:36.698809 ocp_resources Secret [32mINFO[0m Posting {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'htpass-secret-for-cnv-tests', 'namespace': 'openshift-config'}, 'data': '*******'}[0m
+2026-01-23T13:01:36.726018 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+2026-01-23T13:01:36.725865 conftest [32mINFO[0m Executing session fixture: identity_provider_with_htpasswd[0m
+2026-01-23T13:01:36.729756 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource OAuth cluster[0m
+2026-01-23T13:01:36.729864 ocp_resources OAuth [32mINFO[0m Update OAuth cluster:
+{'metadata': {'name': 'cluster'}, 'spec': {'identityProviders': [{'name': 'htpasswd_provider', 'mappingMethod': 'claim', 'type': 'HTPasswd', 'htpasswd': {'fileData': {'name': 'htpass-secret-for-cnv-tests'}}}], 'tokenConfig': {'accessTokenMaxAgeSeconds': 604800, 'accessTokenInactivityTimeout': None}}}[0m
+2026-01-23T13:01:36.748750 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:01:36.757341 ocp_resources.resource [32mINFO[0m kind: Deployment api version: apps/v1[0m
+2026-01-23T13:01:36.809945 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: tests.conftest.<locals>.lambda: dp.instance.status.conditions)[0m
+2026-01-23T13:01:36.809738 tests.conftest [32mINFO[0m Wait for oauth-openshift -> Type: Progressing -> Reason: ReplicaSetUpdated[0m
+2026-01-23T13:02:10.970547 timeout_sampler [32mINFO[0m Elapsed time: 34.1553521156311 [0:00:34.155352][0m
+2026-01-23T13:02:10.970762 timeout_sampler [32mINFO[0m Waiting for 240 seconds [0:04:00], retry every 1 seconds. (Function: tests.conftest.<locals>.lambda: dp.instance.status.conditions)[0m
+2026-01-23T13:02:10.970676 tests.conftest [32mINFO[0m Wait for oauth-openshift -> Type: Progressing -> Reason: NewReplicaSetAvailable[0m
+2026-01-23T13:02:38.108479 timeout_sampler [32mINFO[0m Elapsed time: 27.135077714920044 [0:00:27.135078][0m
+2026-01-23T13:02:38.108679 conftest [32mINFO[0m Executing session fixture: kubeconfig_export_path[0m
+2026-01-23T13:02:38.108803 conftest [32mINFO[0m Executing session fixture: exported_kubeconfig[0m
+2026-01-23T13:02:38.109315 tests.conftest [32mINFO[0m Setting KUBECONFIG dir for this run to point to: /tmp/tmpbokn82aj-cnv-tests-kubeconfig[0m
+2026-01-23T13:02:38.109381 tests.conftest [32mINFO[0m Copy KUBECONFIG to /tmp/tmpbokn82aj-cnv-tests-kubeconfig/kubeconfig[0m
+2026-01-23T13:02:38.109624 tests.conftest [32mINFO[0m Set: KUBECONFIG=/tmp/tmpbokn82aj-cnv-tests-kubeconfig/kubeconfig[0m
+2026-01-23T13:02:38.109724 conftest [32mINFO[0m Executing session fixture: unprivileged_client[0m
+2026-01-23T13:02:38.164995 timeout_sampler [32mINFO[0m Waiting for 60 seconds [0:01:00], retry every 3 seconds. (Function: subprocess.Popen  Kwargs: {'args': 'oc login https://api.crc.testing:6443 -u unprivileged-user -p unprivileged-password', 'shell': True, 'stdout': -1, 'stderr': -1})[0m
+2026-01-23T13:02:38.164831 utilities.infra [32mINFO[0m Trying to login to account[0m
+2026-01-23T13:02:38.351779 timeout_sampler [32mINFO[0m Elapsed time: 0.00016236305236816406 [0:00:00.000162][0m
+2026-01-23T13:02:38.355650 timeout_sampler [32mINFO[0m Waiting for 60 seconds [0:01:00], retry every 3 seconds. (Function: subprocess.Popen  Kwargs: {'args': 'oc login https://api.crc.testing:6443 -u kubeadmin', 'shell': True, 'stdout': -1, 'stderr': -1})[0m
+2026-01-23T13:02:38.351632 utilities.infra [32mINFO[0m Login - success[0m
+2026-01-23T13:02:38.355560 utilities.infra [32mINFO[0m Trying to login to account[0m
+2026-01-23T13:02:38.430078 timeout_sampler [32mINFO[0m Elapsed time: 0.00017523765563964844 [0:00:00.000175][0m
+2026-01-23T13:02:38.430439 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:02:38.429894 utilities.infra [32mINFO[0m Login - success[0m
+2026-01-23T13:02:38.436481 conftest [32mINFO[0m Executing function fixture: hyperconverged_resource_scope_function[0m
+2026-01-23T13:02:38.439646 conftest [32mINFO[0m Executing function fixture: common_instancetypes_list[0m
+2026-01-23T13:02:38.445563 ocp_resources.resource [32mINFO[0m kind: VirtualMachineClusterInstancetype api version: instancetype.kubevirt.io/v1beta1[0m
+----------------------------- Captured stderr call -----------------------------
+2026-01-23T13:02:38.457556 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-01-23T13:02:38.457401 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 1: Verify common-instancetypes are deployed by default[0m
+2026-01-23T13:02:38.457457 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Found 55 common instancetypes before disabling[0m
+2026-01-23T13:02:38.457490 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 2: Edit HCO CR to disable common instancetypes deployment[0m
+2026-01-23T13:02:38.457521 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Setting commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:02:38.460719 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-01-23T13:02:38.460804 ocp_resources HyperConverged [32mINFO[0m Update HyperConverged kubevirt-hyperconverged:
+{'spec': {'commonInstancetypesDeployment': 'Disabled'}, 'metadata': {'name': 'kubevirt-hyperconverged'}}[0m
+2026-01-23T13:02:38.475460 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:02:38.475367 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:02:48.498049 timeout_sampler [32mINFO[0m Elapsed time: 10.016639232635498 [0:00:10.016639][0m
+2026-01-23T13:02:48.498249 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:02:48.498141 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 3: Wait for HCO reconciliation[0m
+2026-01-23T13:02:48.498205 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:02:58.515216 timeout_sampler [32mINFO[0m Elapsed time: 10.010903358459473 [0:00:10.010903][0m
+2026-01-23T13:02:58.515413 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR)[0m
+2026-01-23T13:02:58.515640 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:02:58.515312 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 4: Verify all common-instancetype resources are removed[0m
+2026-01-23T13:02:58.515368 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Waiting for common instancetypes to be deleted[0m
+_ TestCommonInstancetypesDeploymentEnable.test_enable_common_instancetypes_deployment _
+
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentEnable object at 0x7f468a54d1d0>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f4688c625d0>
+
+    @pytest.mark.polarion("CNV-61256-02")
+    def test_enable_common_instancetypes_deployment(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+    ):
+        """
+        Test Scenario 2: Enable Common-Instancetypes
+    
+        Steps:
+            1. Disable common-instancetypes first
+            2. Verify common-instancetypes not deployed
+            3. Edit HCO CR: set commonInstancetypesDeployment: Enabled
+            4. Wait for HCO reconciliation
+            5. Check for common-instancetype resources
+    
+        Expected Result:
+            Common-instancetype resources are deployed
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: critical
+            initialEstimate: 1/4h
+            testSteps:
+                1. Disable common-instancetypes
+                2. Verify common-instancetypes not deployed
+                3. Edit HCO CR: set commonInstancetypesDeployment: Enabled
+                4. Wait for HCO reconciliation
+                5. Check for common-instancetype resources
+            expectedResults:
+                1. Common-instancetypes disabled successfully
+                2. No common-instancetypes present
+                3. HCO CR updated successfully
+                4. HCO reconciliation completes
+                5. Common-instancetype resources deployed
+        """
+        LOGGER.info("Step 1: Disable common-instancetypes first")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 2: Verify common-instancetypes are not deployed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:171: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f4688c5c050>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentDisable object at 0x7f468a54c190>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f4689030190>
+common_instancetypes_list = [<ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4688fe86e0>, <ocp..., <ocp_resources.virtual_machine_cluster_instancetype.VirtualMachineClusterInstancetype object at 0x7f4689030b90>, ...]
+
+    @pytest.mark.polarion("CNV-61256-01")
+    def test_disable_common_instancetypes_deployment(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+        common_instancetypes_list,
+    ):
+        """
+        Test Scenario 1: Disable Common-Instancetypes
+    
+        Steps:
+            1. Verify common-instancetypes are deployed (default)
+            2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+            3. Wait for HCO reconciliation
+            4. Check for common-instancetype resources
+    
+        Expected Result:
+            All common-instancetype resources are removed
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: critical
+            initialEstimate: 1/4h
+            testSteps:
+                1. Verify common-instancetypes deployed (default)
+                2. Edit HCO CR: set commonInstancetypesDeployment: Disabled
+                3. Wait for HCO reconciliation
+                4. Check for common-instancetype resources
+            expectedResults:
+                1. Common-instancetypes are present
+                2. HCO CR updated successfully
+                3. HCO reconciliation completes
+                4. All common-instancetype resources removed
+        """
+        LOGGER.info("Step 1: Verify common-instancetypes are deployed by default")
+        assert common_instancetypes_list, "No common instancetypes found before disabling"
+        initial_count = len(common_instancetypes_list)
+        LOGGER.info(f"Found {initial_count} common instancetypes before disabling")
+    
+        LOGGER.info("Step 2: Edit HCO CR to disable common instancetypes deployment")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+    
+        LOGGER.info("Step 3: Wait for HCO reconciliation")
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 4: Verify all common-instancetype resources are removed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:91: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f4688b5d9f0>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+
+------------------------------------- test_enable_common_instancetypes_deployment -------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-01-23T13:07:59.829756 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-01-23T13:07:59.829881 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-01-23T13:07:59.830017 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-01-23T13:07:59.830116 conftest [32mINFO[0m Executing function fixture: hyperconverged_resource_scope_function[0m
+----------------------------- Captured stderr call -----------------------------
+2026-01-23T13:07:59.836521 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data --- [DuplicateFilter: Last log `Trying to get client via new_client_from_config` repeated 59 times][0m
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-01-23T13:07:59.836410 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 1: Disable common-instancetypes first[0m
+2026-01-23T13:07:59.836466 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Setting commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:07:59.841302 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-01-23T13:07:59.857267 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:07:59.857139 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:08:09.881435 timeout_sampler [32mINFO[0m Elapsed time: 10.01229977607727 [0:00:10.012300][0m
+2026-01-23T13:08:09.881674 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:08:09.881595 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:08:19.898790 timeout_sampler [32mINFO[0m Elapsed time: 10.010302782058716 [0:00:10.010303][0m
+2026-01-23T13:08:19.899063 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR)[0m
+2026-01-23T13:08:19.898916 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 2: Verify common-instancetypes are not deployed[0m
+2026-01-23T13:08:19.899440 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:08:19.898996 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Waiting for common instancetypes to be deleted[0m
+_ TestCommonInstancetypesDeploymentPersistence.test_setting_persistence_across_reconciliation _
+
+self = <tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment.TestCommonInstancetypesDeploymentPersistence object at 0x7f468a54d090>
+admin_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f468bb09be0>
+unprivileged_client = <kubernetes.dynamic.client.DynamicClient object at 0x7f4688e84150>
+hco_namespace = <ocp_resources.namespace.Namespace object at 0x7f468a4d3360>
+hyperconverged_resource_scope_function = <ocp_resources.hyperconverged.HyperConverged object at 0x7f468a54f110>
+
+    @pytest.mark.polarion("CNV-61256-04")
+    def test_setting_persistence_across_reconciliation(
+        self,
+        admin_client,
+        unprivileged_client,
+        hco_namespace,
+        hyperconverged_resource_scope_function,
+    ):
+        """
+        Test Scenario 4: Setting Persistence
+    
+        Steps:
+            1. Set commonInstancetypesDeployment: Disabled
+            2. Verify instancetypes are removed
+            3. Trigger HCO reconciliation by editing another field
+            4. Verify commonInstancetypesDeployment remains Disabled
+            5. Verify instancetypes remain disabled
+    
+        Expected Result:
+            Setting persists across reconciliations
+    
+        Polarion:
+            assignee: sgott
+            casecomponent: HCO
+            caseimportance: high
+            initialEstimate: 1/4h
+            testSteps:
+                1. Set commonInstancetypesDeployment: Disabled
+                2. Verify setting and instancetypes removed
+                3. Trigger HCO reconciliation
+                4. Verify setting persists
+            expectedResults:
+                1. Setting updated successfully
+                2. Instancetypes removed
+                3. Reconciliation completes
+                4. Setting persists, instancetypes remain disabled
+        """
+        LOGGER.info("Step 1: Set commonInstancetypesDeployment to Disabled")
+        set_common_instancetypes_deployment_spec(
+            admin_client=admin_client,
+            hco_namespace=hco_namespace,
+            hyperconverged_resource=hyperconverged_resource_scope_function,
+            value="Disabled",
+        )
+        wait_for_hco_conditions(admin_client=admin_client, hco_namespace=hco_namespace)
+    
+        LOGGER.info("Step 2: Verify instancetypes are removed")
+>       wait_for_common_instancetypes_deleted(unprivileged_client=unprivileged_client)
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py:134: in wait_for_common_instancetypes_deleted
+    for sample in TimeoutSampler(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <timeout_sampler.TimeoutSampler object at 0x7f46839dc5f0>
+
+    def __iter__(self) -> Any:
+        """
+        Call `func` and yield the result, or raise an exception on timeout.
+    
+        Yields:
+            any: Return value from `func`
+    
+        Raises:
+            TimeoutExpiredError: if `func` takes longer than `wait_timeout` seconds to return a value
+        """
+        timeout_watch = TimeoutWatch(timeout=self.wait_timeout)
+        if self.print_log:
+            log = (
+                f"Waiting for {self.wait_timeout} seconds"
+                f" [{datetime.timedelta(seconds=self.wait_timeout)}], retry every"
+                f" {self.sleep} seconds."
+            )
+    
+            if self.print_func_log:
+                log += f" ({self._func_log})"
+    
+            LOGGER.info(log)
+    
+        last_exp = None
+        elapsed_time = None
+        while timeout_watch.remaining_time() > 0:
+            try:
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+                yield self.func(*self.func_args, **self.func_kwargs)
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            except Exception as exp:
+                last_exp = exp
+                elapsed_time = self.wait_timeout - timeout_watch.remaining_time()
+    
+                if not self._should_ignore_exception(exp=last_exp):
+                    raise TimeoutExpiredError(
+                        self._get_exception_log(exp=last_exp), last_exp=last_exp, elapsed_time=elapsed_time
+                    )
+    
+                time.sleep(self.sleep)
+                elapsed_time = None
+    
+            finally:
+                if self.print_log and elapsed_time:
+                    LOGGER.info(_elapsed_time_log(elapsed_time=elapsed_time))
+    
+>       raise TimeoutExpiredError(self._get_exception_log(exp=last_exp), last_exp=last_exp)
+E       timeout_sampler.TimeoutExpiredError: Timed Out: 300
+E       Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR
+E       Last exception: N/A.
+
+.venv/lib/python3.14/site-packages/timeout_sampler/__init__.py:182: TimeoutExpiredError
+---------------------------- Captured stderr setup -----------------------------
+------------------------------------------------------- TEARDOWN -------------------------------------------------------
+
+------------------------------------ test_setting_persistence_across_reconciliation ------------------------------------
+-------------------------------------------------------- SETUP --------------------------------------------------------
+2026-01-23T13:13:21.231620 conftest [32mINFO[0m Executing function fixture: term_handler_scope_function[0m
+2026-01-23T13:13:21.231713 conftest [32mINFO[0m Executing class fixture: term_handler_scope_class[0m
+2026-01-23T13:13:21.231877 conftest [32mINFO[0m Executing function fixture: autouse_fixtures[0m
+2026-01-23T13:13:21.231979 conftest [32mINFO[0m Executing function fixture: hyperconverged_resource_scope_function[0m
+----------------------------- Captured stderr call -----------------------------
+2026-01-23T13:13:21.235370 ocp_resources.resource [32mINFO[0m ResourceEdit: Backing up old data[0m
+--------------------------------------------------------- CALL ---------------------------------------------------------
+2026-01-23T13:13:21.235266 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 1: Set commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:13:21.235321 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Setting commonInstancetypesDeployment to Disabled[0m
+2026-01-23T13:13:21.251067 ocp_resources.resource [32mINFO[0m ResourceEdits: Updating data for resource HyperConverged kubevirt-hyperconverged[0m
+2026-01-23T13:13:21.269398 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:13:21.269274 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:13:31.289009 timeout_sampler [32mINFO[0m Elapsed time: 10.013350248336792 [0:00:10.013350][0m
+2026-01-23T13:13:31.289223 timeout_sampler [32mINFO[0m Waiting for 600 seconds [0:10:00], retry every 5 seconds. (Function: utilities.infra.<locals>.lambda: dynamic_client.namespace.resource_kind.resource_name.list.get)[0m
+2026-01-23T13:13:31.289125 utilities.infra [32mINFO[0m Waiting for resource to stabilize: resource_kind=HyperConverged conditions={'Available': 'True', 'Progressing': 'False', 'ReconcileComplete': 'True', 'Degraded': 'False', 'Upgradeable': 'True'} sleep=600 consecutive_checks_count=3[0m
+2026-01-23T13:13:41.315101 timeout_sampler [32mINFO[0m Elapsed time: 10.013458490371704 [0:00:10.013458][0m
+2026-01-23T13:13:41.315314 timeout_sampler [32mINFO[0m Waiting for 300 seconds [0:05:00], retry every 5 seconds. (Function: tests.install_upgrade_operators.common_instancetypes_deployment.conftest.<locals>.lambda: unprivileged_client.list.VirtualMachineClusterInstancetype.get.COMMON_INSTANCETYPE_SELECTOR)[0m
+2026-01-23T13:13:41.315537 ocp_resources.resource [32mINFO[0m Trying to get client via new_client_from_config[0m
+2026-01-23T13:13:41.315202 tests.install_upgrade_operators.common_instancetypes_deployment.test_common_instancetypes_deployment [32mINFO[0m Step 2: Verify instancetypes are removed[0m
+2026-01-23T13:13:41.315264 tests.install_upgrade_operators.common_instancetypes_deployment.conftest [32mINFO[0m Waiting for common instancetypes to be deleted[0m
+=============================== warnings summary ===============================
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:29
+  /home/mvavrine/cnv/openshift-virtualization-tests/tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py:29: PytestUnknownMarkWarning: Unknown pytest.mark.tier1 - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytestmark = [pytest.mark.tier1, pytest.mark.post_upgrade]
+
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentDisable::test_disable_common_instancetypes_deployment
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentDisable::test_disable_common_instancetypes_deployment
+tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentDisable::test_disable_common_instancetypes_deployment
+tests/deprecated_api/test_deprecation_audit_logs.py::test_deprecated_apis_in_audit_logs
+tests/deprecated_api/test_deprecation_audit_logs.py::test_deprecated_apis_in_audit_logs
+tests/deprecated_api/test_deprecation_audit_logs.py::test_deprecated_apis_in_audit_logs
+tests/deprecated_api/test_deprecation_audit_logs.py::test_deprecated_apis_in_audit_logs
+.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91
+.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91
+  /home/mvavrine/cnv/openshift-virtualization-tests/.venv/lib/python3.14/site-packages/kubernetes/client/exceptions.py:91: DeprecationWarning: HTTPResponse.getheaders() is deprecated and will be removed in urllib3 v2.1.0. Instead access HTTPResponse.headers directly.
+    self.headers = http_resp.getheaders()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentDisable::test_disable_common_instancetypes_deployment
+FAILED tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentEnable::test_enable_common_instancetypes_deployment
+FAILED tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py::TestCommonInstancetypesDeploymentPersistence::test_setting_persistence_across_reconciliation
+===== 3 failed, 2 passed, 1 deselected, 10 warnings in 1135.06s (0:18:55) ======

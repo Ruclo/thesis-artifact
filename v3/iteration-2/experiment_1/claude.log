@@ -1,0 +1,119 @@
+Phase 1 (`/v3-generate-std`) is complete.
+
+**Generated STD file:** `tests/std/common_instancetypes_deployment/std_cnv_61256.md`
+
+**Summary of the STD:**
+
+- **Feature:** Disable Common-Instancetypes Deployment from HCO (`CommonInstancetypesDeployment` field)
+- **Jira:** CNV-61256 / CNV-59564
+- **Test file target:** `tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py`
+- **7 tests across 4 classes:**
+  - `TestCommonInstancetypesDeploymentDisabled` (2 tests, P0) - verifies instancetypes and preferences are removed when disabled
+  - `TestCommonInstancetypesDeploymentEnabled` (2 tests, P0) - verifies instancetypes and preferences are deployed when enabled
+  - `TestCommonInstancetypesDeploymentDefault` (2 tests, P0) - verifies default behavior deploys instancetypes
+  - `TestCommonInstancetypesDeploymentPersistence` (1 test, P1) - verifies disabled setting persists across HCO reconciliation
+- **Excluded:** Scenario 5 (upgrade testing, Tier 2/P2) - handled by separate upgrade infrastructure
+- **GRAVEYARD awareness:** The STD accounts for the known issue that `CommonInstancetypesDeployment` uses capital 'C' with nested `{"enabled": bool}` structure (not string enum values)
+Phase 2 (`/v3-explore-test-context`) is complete. The exploration covered:
+
+- **Documentation**: Pytest markers, fixture conventions, coding standards from CLAUDE.md
+- **Utilities**: `ResourceEditorValidateHCOReconcile` for HCO patching, `VirtualMachineClusterInstancetype.get()` for listing instance types, timeout constants
+- **Patterns**: HCO CR modification via context manager fixtures, instance type listing with label selectors, common import paths
+- **GRAVEYARD**: 8 lessons learned, 2 directly relevant to this feature (capital 'C' field name, nested object value type `{"enabled": bool}` not string enum)
+Phase 3 (`/v3-generate-pytest`) is complete.
+
+**Generated files:**
+
+1. `tests/install_upgrade_operators/common_instancetypes_deployment/__init__.py` - Package marker
+2. `tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py` - Fixtures and helpers
+3. `tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py` - 7 tests across 4 classes
+
+**Structure summary:**
+
+| File | Contents |
+|------|----------|
+| `conftest.py` | `disabled_common_instancetypes_deployment` and `enabled_common_instancetypes_deployment` fixtures using `ResourceEditorValidateHCOReconcile`; helper functions `get_common_cluster_instancetypes()`, `get_common_cluster_preferences()`, and `wait_for_*` functions using `TimeoutSampler` |
+| `test_common_instancetypes_deployment.py` | 4 test classes implementing all 7 STD scenarios |
+
+**GRAVEYARD compliance:**
+- Uses `CommonInstancetypesDeployment` (capital 'C'), not `commonInstancetypesDeployment`
+- Uses `{"enabled": True/False}` nested object, not `"Enabled"/"Disabled"` string enum
+- All `DynamicClient` type hints use `kubernetes.dynamic.DynamicClient`
+Phase 4 (`/v3-graveyard-verify`) is complete.
+
+## GRAVEYARD Verification Report
+
+**Files verified:**
+- `tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py`
+- `tests/install_upgrade_operators/common_instancetypes_deployment/conftest.py`
+
+**GRAVEYARD entries checked: 10**
+
+| # | Entry | Applicable? | Result |
+|---|-------|-------------|--------|
+| 1 | Wrong HCO CR field casing/value type | Yes | PASS - Uses `"CommonInstancetypesDeployment"` (capital C) with `{"enabled": bool}` |
+| 2 | Wrong type hints on helper params | Yes | PASS - All `admin_client` params typed as `DynamicClient` |
+| 3 | Multiple VM fixtures in same class | No | N/A - No VM fixtures |
+| 4 | run_virtctl_command verify_stderr | No | N/A - No virtctl usage |
+| 5 | TimeoutExpiredError vs ApiException | No | N/A - No pytest.raises for API errors |
+| 6 | Reset on paused VMI succeeds | No | N/A - No VMI reset |
+| 7 | Unprivileged user has reset permission | No | N/A - No RBAC tests |
+| 8 | SSH timeout after hard reset | No | N/A - No SSH operations |
+| 9 | maxSockets/memory_guest too large | No | N/A - No VM creation |
+| 10 | CPU hotplug migration on constrained clusters | No | N/A - No hotplug |
+
+**Violations found: 0**
+**Fixes applied: 0**
+
+The generated code correctly applies both directly relevant GRAVEYARD lessons (entries 1 and 2). No modifications needed.
+Phase 5 (`/v3-pyright-heal`) is complete.
+
+## Pyright Validation Report
+
+| File | Errors | Warnings | Iterations |
+|------|--------|----------|------------|
+| `test_common_instancetypes_deployment.py` | 0 | 0 | 0 (clean on first run) |
+| `conftest.py` | 0 | 0 | 0 (clean on first run) |
+
+Both files passed pyright with **0 errors, 0 warnings, 0 informations** on the first run. No fixes were needed.
+Phase 6 (`/v3-test-heal`) is complete.
+
+## Test Execution Report
+
+```
+========== 7 passed, 12 warnings, 1 quarantined in 504.83s (0:08:24) ===========
+```
+
+| Test | Result |
+|------|--------|
+| `TestCommonInstancetypesDeploymentDisabled::test_common_cluster_instancetypes_absent_when_disabled` | PASSED |
+| `TestCommonInstancetypesDeploymentDisabled::test_common_cluster_preferences_absent_when_disabled` | PASSED |
+| `TestCommonInstancetypesDeploymentEnabled::test_common_cluster_instancetypes_present_when_enabled` | PASSED |
+| `TestCommonInstancetypesDeploymentEnabled::test_common_cluster_preferences_present_when_enabled` | PASSED |
+| `TestCommonInstancetypesDeploymentDefault::test_common_instancetypes_deployed_by_default` | PASSED |
+| `TestCommonInstancetypesDeploymentDefault::test_common_preferences_deployed_by_default` | PASSED |
+| `TestCommonInstancetypesDeploymentPersistence::test_disabled_setting_persists_after_reconciliation` | PASSED |
+
+- **Iterations needed**: 0 (all tests passed on first run)
+- **Fixes applied**: 0
+- **GRAVEYARD updates**: None needed (no new failures discovered)
+
+---
+
+## All 6 Phases Complete - Final Summary
+
+```
+Input:  stps/1.md (STP: Disable Common-Instancetypes Deployment from HCO)
+Output: tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py
+
+Phases:
+  Phase 1 - STD Generation:        tests/std/common_instancetypes_deployment/std_cnv_61256.md
+  Phase 2 - Repository Exploration: utilities, fixtures, conventions, GRAVEYARD lessons
+  Phase 3 - Pytest Code Generation: 7 tests, conftest.py + test file
+  Phase 4 - GRAVEYARD Verification: 10 entries checked, 0 violations
+  Phase 5 - Pyright Validation:     0 errors, 0 iterations
+  Phase 6 - Test Execution:         7 passed, 0 failed, 0 iterations
+
+Ready for use:
+  uv run pytest tests/install_upgrade_operators/common_instancetypes_deployment/test_common_instancetypes_deployment.py
+```

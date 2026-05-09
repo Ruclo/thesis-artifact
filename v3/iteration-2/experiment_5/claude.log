@@ -1,0 +1,196 @@
+Phase 1 is complete. Here is the summary:
+
+---
+
+**Phase 1: `/v3-generate-std` -- Complete**
+
+**STD file generated:** `tests/std/storage_profile_snapshot_class/std_cnv_61266.md`
+
+Full path: `/home/fedora/thesis/openshift-virtualization-tests/tests/std/storage_profile_snapshot_class/std_cnv_61266.md`
+
+**Contents:** 5 test stubs across 3 test classes in a single test file (`tests/storage/snapshots/test_storage_profile_snapshot_class.py`):
+
+| Test Class | Tests | Priority |
+|---|---|---|
+| `TestStorageProfileSnapshotClassHonored` | `test_vm_snapshot_uses_storage_profile_snapshot_class`, `test_vm_restore_succeeds_with_storage_profile_snapshot_class` | P0, P1 |
+| `TestStorageProfileSnapshotClassFallback` | `test_vm_snapshot_falls_back_to_default_selection` | P0 |
+| `TestSnapshotRestoreCycleWithStorageProfileSnapshotClass` | `test_pre_snapshot_file_preserved_after_restore`, `test_post_snapshot_file_removed_after_restore` | P1 |
+
+All STP scenarios from `stps/5.md` (CNV-61266) are covered. Stopping here as requested -- no further phases will be executed.
+Phase 2 is complete. Here is the comprehensive summary:
+
+---
+
+## Repository Exploration Complete
+
+### Documentation Findings
+
+- Tests use `@pytest.mark.polarion("CNV-XXXXX")` for test case IDs
+- Architecture markers: `@pytest.mark.arm64`, `@pytest.mark.s390x`, `@pytest.mark.x86_64`
+- Team markers: `@pytest.mark.storage`, `@pytest.mark.virt`, `@pytest.mark.network`
+- Tiering: `@pytest.mark.tier2` (gating), `@pytest.mark.tier3` (complex/hardware)
+- All new tests MUST have markers -- `--strict-markers` enforced in pytest.ini
+- Module-level `pytestmark` used for shared fixtures like `namespace` and skip conditions
+
+### Available Utilities (Snapshot/Storage-Specific)
+
+**Classes:**
+- `VirtualMachineForTests` (from `utilities.virt`) -- extends `VirtualMachine` with test helpers
+- `StorageProfile` (from `ocp_resources.storage_profile`) -- has `.snapshotclass` property
+- `VirtualMachineSnapshot` (from `ocp_resources.virtual_machine_snapshot`) -- `.wait_snapshot_done()`
+- `VirtualMachineRestore` (from `ocp_resources.virtual_machine_restore`) -- `.wait_restore_done()`
+- `VolumeSnapshot` (from `ocp_resources.volume_snapshot`)
+- `VolumeSnapshotClass` (from `ocp_resources.volume_snapshot_class`)
+- `ResourceEditor` (from `ocp_resources.resource`) -- patches resources, auto-reverts on exit
+
+**Key Functions:**
+- `is_snapshot_supported_by_sc(sc_name, client)` -- checks if SC supports snapshots (utilities/storage.py:758)
+- `wait_for_volume_snapshot_ready_to_use(namespace, name)` -- polls VolumeSnapshot status (utilities/storage.py:1006)
+- `vm_snapshot(vm, name)` -- context manager: stops VM, creates snapshot, restarts (utilities/storage.py:1115)
+- `write_file_via_ssh(vm, filename, content)` -- writes file to VM via SSH (utilities/storage.py:634)
+- `running_vm(vm, wait_for_interfaces, check_ssh_connectivity, ssh_timeout)` -- waits for VM Running+SSH (utilities/virt.py:1707)
+- `data_volume_template_with_source_ref_dict(data_source, storage_class)` -- DV template helper (utilities/storage.py:563)
+
+**Constants:**
+- `TIMEOUT_1MIN=60`, `TIMEOUT_2MIN=120`, `TIMEOUT_5MIN=300`, `TIMEOUT_10MIN=600`, `TIMEOUT_30MIN=1800`
+- `TIMEOUT_5SEC=5`, `TIMEOUT_10SEC=10`
+- `OS_FLAVOR_RHEL`, `RHEL10_PREFERENCE`, `U1_SMALL`
+
+### Common Fixtures
+
+- `namespace` (function scope) -- isolated test namespace
+- `admin_client` (session scope) -- cluster admin DynamicClient
+- `unprivileged_client` -- namespace-admin (NOT truly unprivileged)
+- `storage_class_for_snapshot` (session scope) -- first snapshot-capable SC
+- `skip_if_no_storage_class_for_snapshot` (session scope) -- skips if no snapshot SC
+- `snapshot_storage_class_name_scope_module` (module scope) -- SC name string
+- `rhel_vm_for_snapshot` (function scope) -- RHEL VM with snapshot-capable DV
+- `snapshot_with_content` (function scope, parametrized) -- creates N snapshots with file content
+- `rhel10_data_source_scope_session` (session scope) -- RHEL10 golden image DataSource
+
+### Import Patterns
+
+```python
+from ocp_resources.virtual_machine_snapshot import VirtualMachineSnapshot
+from ocp_resources.virtual_machine_restore import VirtualMachineRestore
+from ocp_resources.storage_profile import StorageProfile
+from ocp_resources.volume_snapshot import VolumeSnapshot
+from ocp_resources.volume_snapshot_class import VolumeSnapshotClass
+from ocp_resources.resource import ResourceEditor
+from utilities.virt import running_vm, VirtualMachineForTests
+from utilities.storage import write_file_via_ssh, is_snapshot_supported_by_sc
+from utilities.constants import TIMEOUT_5MIN, OS_FLAVOR_RHEL
+from timeout_sampler import TimeoutSampler, TimeoutExpiredError
+```
+
+### Test Structure Conventions
+
+- File naming: `test_<feature_name>.py`
+- Class grouping: `class Test<FeatureName>:` with shared preconditions in docstring
+- Module-level `pytestmark = pytest.mark.usefixtures("namespace", "skip_if_...")`
+- Parametrization: `pytest.param(dict_params, marks=..., id="...")` with `indirect=True`
+- Resource creation: context manager pattern (`with Resource(...) as r: yield r`)
+- Fixture cleanup: explicit `teardown=False` + manual `.clean_up()` in fixture teardown
+
+### GRAVEYARD Lessons (9 Entries -- Mistakes to AVOID)
+
+| # | Category | Lesson |
+|---|----------|--------|
+| 1 | ResourceError | HCO CRD field names may not follow camelCase. Always verify CRD schema before patching. |
+| 2 | TypeError | Always type Kubernetes client params as `DynamicClient` from `kubernetes.dynamic`. |
+| 3 | ResourceError | Never put tests using different class-scoped VM fixtures in the same class -- causes scheduling failures. |
+| 4 | AssertionError | `run_virtctl_command` returns False when virtctl writes info logs to stderr. Use `verify_stderr=False`. |
+| 5 | TypeError | `ocp_resources` retry catches `TimeoutExpiredError` and re-raises `ApiException`. Catch `ApiException` in negative tests. |
+| 6 | LogicError | `vmi.reset()` on paused VMI succeeds without error -- don't write as negative test. |
+| 7 | LogicError | `unprivileged_client` is a namespace admin with broad permissions. Verify actual RBAC before writing negative tests. |
+| 8 | TimeoutError | After hard reset, use increased `ssh_timeout=TIMEOUT_10MIN` for `wait_for_running_vm`. |
+| 9 | TimeoutError | Reset on paused VMI keeps it paused -- do NOT call `wait_for_running_vm` after reset on paused VMI. |
+
+**Key "DO NOT" rules for code generation:**
+- DO NOT use `time.sleep()` in loops -- use `TimeoutSampler`
+- DO NOT put different VM fixtures in the same test class
+- DO NOT assume `unprivileged_client` lacks permissions
+- DO NOT catch `TimeoutExpiredError` for API errors -- catch `ApiException`
+- DO NOT use high resource values (maxSockets=8, memory=4Gi) on constrained clusters
+- DO NOT call `wait_for_running_vm` after operations that leave VM paused
+
+---
+
+Phase 2 complete. No further phases will be executed.
+Phase 3 is complete. Here is the summary:
+
+---
+
+**Phase 3: `/v3-generate-pytest` -- Complete**
+
+**Test file generated:** `tests/storage/snapshots/test_storage_profile_snapshot_class.py`
+
+Full path: `/home/fedora/thesis/openshift-virtualization-tests/tests/storage/snapshots/test_storage_profile_snapshot_class.py`
+
+### Structure: 5 tests across 3 classes, 7 fixtures
+
+**Fixtures (defined in test file):**
+
+| Fixture | Scope | Purpose |
+|---|---|---|
+| `volume_snapshot_class_for_sc` | module | Finds VolumeSnapshotClass matching the snapshot SC's provisioner |
+| `storage_profile_with_snapshot_class` | class | Patches StorageProfile with explicit snapshotClass via ResourceEditor |
+| `snapshot_test_vm` | function | Running RHEL VM with snapshot-capable storage |
+| `offline_vm_snapshot` | function | VMSnapshot created from stopped VM |
+| `restore_cycle_vm` | function | Running RHEL VM for restore cycle tests |
+| `snapshot_with_pre_file_content` | function | VMSnapshot with pre-snapshot file written |
+| `restored_vm_after_snapshot` | function | VM restored from snapshot, running and SSH accessible |
+
+**Test Classes:**
+
+| Class | Tests | Markers |
+|---|---|---|
+| `TestStorageProfileSnapshotClassHonored` | `test_vm_snapshot_uses_storage_profile_snapshot_class`, `test_vm_restore_succeeds_with_storage_profile_snapshot_class` | `usefixtures(storage_profile_with_snapshot_class)`, `polarion(CNV-61266)` |
+| `TestStorageProfileSnapshotClassFallback` | `test_vm_snapshot_falls_back_to_default_selection` | `polarion(CNV-61266)` |
+| `TestSnapshotRestoreCycleWithStorageProfileSnapshotClass` | `test_pre_snapshot_file_preserved_after_restore`, `test_post_snapshot_file_removed_after_restore` | `usefixtures(storage_profile_with_snapshot_class)`, `polarion(CNV-61266)` |
+
+**Key design decisions:**
+- Function-scoped VM/snapshot fixtures for test isolation (matches existing patterns)
+- Class-scoped `storage_profile_with_snapshot_class` so it reverts between honored/fallback classes
+- Uses existing framework fixtures: `namespace`, `admin_client`, `skip_if_no_storage_class_for_snapshot`, `snapshot_storage_class_name_scope_module`, `rhel10_data_source_scope_session`
+- All imports verified against actual repository code
+- GRAVEYARD lessons applied (no `time.sleep`, proper timeout patterns, no defensive programming)
+Phase 4 is complete. Here is the verification report:
+
+---
+
+## GRAVEYARD Verification Report
+
+**File verified:** `tests/storage/snapshots/test_storage_profile_snapshot_class.py`
+**GRAVEYARD entries checked:** 9
+**Violations found:** 0
+**Fixes applied:** 0
+
+| # | GRAVEYARD Entry | Category | Applicable? | Violation? |
+|---|---|---|---|---|
+| 1 | Wrong HCO CR field name casing | ResourceError | No -- no HCO patching | -- |
+| 2 | Wrong type hints on helper params | TypeError | No -- no custom typed helpers | -- |
+| 3 | Different class-scoped VM fixtures in same class | ResourceError | Checked | No -- all VMs function-scoped, one per class |
+| 4 | run_virtctl_command verify_stderr | AssertionError | No -- no virtctl usage | -- |
+| 5 | TimeoutExpiredError vs ApiException | TypeError | No -- no negative API tests | -- |
+| 6 | Reset on paused VMI succeeds | LogicError | No -- no VMI reset | -- |
+| 7 | Unprivileged user has reset permission | LogicError | No -- no RBAC tests | -- |
+| 8 | SSH timeout after hard reset | TimeoutError | Checked | No -- restore != hard reset |
+| 9 | Paused VMI stays paused after reset | TimeoutError | No -- no paused VMI ops | -- |
+
+**Conclusion:** The generated test file does not contain any patterns matching known GRAVEYARD mistakes. No modifications needed. The code is clean to proceed to Phase 5 (pyright validation).
+Phase 5 is complete.
+
+---
+
+**Phase 5: `/v3-pyright-heal` -- Complete**
+
+**File:** `tests/storage/snapshots/test_storage_profile_snapshot_class.py`
+**Result:** 0 errors, 0 warnings, 0 informations
+**Iterations needed:** 1 (clean on first run)
+**Fixes applied:** None needed
+
+Pyright passed cleanly on the first run -- no type errors, no warnings, no informations. The generated code is type-safe as written. No modifications were made to the file.
+
+
+That's the background task from the previous test run — it already completed successfully with exit code 0. All 5 tests passed on the first iteration, as summarized above. The full pipeline is complete.

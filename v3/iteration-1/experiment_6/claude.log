@@ -1,0 +1,176 @@
+Phase 1 is complete. Here is the summary:
+
+---
+
+**Phase 1: STD Generation - Complete**
+
+**Input:** `/home/fedora/thesis/stps/6.md` (STP: CPU Hotplug Logic Exceeding Maximum Limits - CNV-61263)
+
+**Output:** `tests/std/cpu_hotplug_max_limit/std_cnv_61263.md`
+
+**Generated test structure:**
+
+| Test Class | Tests | Priority | Tier |
+|---|---|---|---|
+| `TestCPUHotplugMaxSocketsLimit` | 4 tests | P0/P1 | Tier 1 |
+| `TestCPUHotplugFullCycleWithinLimits` | 2 tests | P1 | Tier 2 |
+
+**6 tests total** covering all 4 STP scenarios:
+1. `test_max_sockets_limited_by_max_vcpus` - MaxSockets calculation verification
+2. `test_hotplug_cpu_up_to_max_sockets` - Hotplug succeeds up to limit
+3. `test_hotplug_cpu_beyond_max_sockets_rejected` - [NEGATIVE] Hotplug blocked beyond limit
+4. `test_error_message_when_exceeding_cpu_limit` - [NEGATIVE] Error message validation
+5. `test_hotplug_from_initial_to_max_within_limits` - Full cycle within limits
+6. `test_no_further_hotplug_after_reaching_max` - [NEGATIVE] No hotplug past max
+
+**Stopping as requested. No further phases will be executed.**
+Phase 2 is complete. Here is the full exploration summary:
+
+---
+
+## Repository Exploration Complete
+
+### Documentation / Conventions
+- Tests use `@pytest.mark.polarion("CNV-xxxxx")` for test case tracking
+- Architecture markers: `@pytest.mark.arm64`, `@pytest.mark.s390x`, `@pytest.mark.x86_64`
+- Tiering: `@pytest.mark.tier2`, `@pytest.mark.tier3` (no tier1 marker)
+- `@pytest.mark.gating` for CI/CD gating tests
+- `@pytest.mark.rwx_default_storage` required for hotplug tests (live migration needs RWX)
+- `@pytest.mark.special_infra` / `@pytest.mark.high_resource_vm` for Windows VMs
+- `pytestmark = pytest.mark.rwx_default_storage` used at module level
+
+### Available Utilities
+
+**Classes:**
+- `VirtualMachineForTestsFromTemplate` (from `utilities.virt`) - creates VMs from templates with CPU hotplug support via `cpu_max_sockets`, `cpu_sockets`, `cpu_cores`, `cpu_threads`, `cpu_model`, `cpu_flags`
+
+**Key Hotplug Functions (from `tests.utils`):**
+- `hotplug_spec_vm(vm, sockets=None, memory_guest=None)` - patches VM spec via `ResourceEditor`
+- `hotplug_spec_vm_and_verify_hotplug(vm, client, sockets=None, memory_guest=None)` - hotplug + migration verification
+- `wait_for_guest_os_cpu_count(vm, spec_cpu_amount)` - polls guest OS CPU count (1min timeout, 5s interval)
+- `assert_restart_required_condition(vm, expected_message)` - checks RestartRequired condition
+- `clean_up_migration_jobs(client, vm)` - cleanup after hotplug
+
+**Other Utilities:**
+- `running_vm(vm)` (from `utilities.virt`) - starts VM and waits for SSH
+- `migrate_vm_and_verify(vm)` (from `utilities.virt`) - migration with verification
+- `restart_vm_wait_for_running_vm(vm)` (from `utilities.virt`) - restart cycle
+
+**Constants (from `utilities.constants`):**
+- CPU: `TWO_CPU_SOCKETS=2`, `FOUR_CPU_SOCKETS=4`, `SIX_CPU_SOCKETS=6`, `EIGHT_CPU_SOCKETS=8`, `TEN_CPU_SOCKETS=10`
+- CPU topology: `ONE_CPU_CORE=1`, `ONE_CPU_THREAD=1`
+- Timeouts: `TIMEOUT_1MIN=60`, `TIMEOUT_5MIN=300`, `TIMEOUT_10MIN=600`
+
+### Common Fixtures (from `tests/virt/node/conftest.py`)
+- `hotplugged_vm` (class scope) - creates VM with `cpu_max_sockets=EIGHT_CPU_SOCKETS`, `cpu_sockets=FOUR_CPU_SOCKETS`
+- `hotplugged_sockets_memory_guest` (function scope) - performs hotplug operation via `request.param`
+- `vmx_disabled_flag` (session scope) - disables VMX on x86_64 for hotplug CPU onlining
+
+### Existing Hotplug Test Patterns
+- **Error case**: `pytest.raises(UnprocessibleEntityError)` when hotplugging beyond `maxSockets`
+- **Import**: `from kubernetes.dynamic.exceptions import UnprocessibleEntityError`
+- **Dependency chains**: `@pytest.mark.dependency(name=..., depends=[...])` for ordered tests
+- **Indirect parametrization**: `@pytest.mark.parametrize("fixture_name", [...], indirect=True)`
+
+### GRAVEYARD Lessons (7 entries - Mistakes to AVOID)
+
+1. **HCO CR field casing** - Field names don't always follow camelCase (e.g., `CommonInstancetypesDeployment` not `commonInstancetypesDeployment`). Always verify CRD schema.
+2. **Wrong type hints** - Always use `DynamicClient` from `kubernetes.dynamic` for client params, never `object` or return types.
+3. **Multiple class-scoped VM fixtures** - Never put tests using different class-scoped VM fixtures in the same class; causes scheduling failures on resource-constrained clusters.
+4. **`run_virtctl_command` stderr** - Always pass `verify_stderr=False` for virtctl commands that write info logs to stderr.
+5. **`ocp_resources` retry re-raises `ApiException`** - Catch `ApiException` not `TimeoutExpiredError` for negative API tests.
+6. **Reset on paused VMI succeeds** - Hard reset works on paused VMIs; don't write negative tests assuming it fails.
+7. **SSH timeout after hard reset** - Use `TIMEOUT_10MIN` not default `TIMEOUT_2MIN` for SSH after cold boot operations.
+
+**Stopping as requested. No further phases will be executed.**
+Phase 3 is complete. Here is the summary:
+
+---
+
+**Phase 3: Pytest Code Generation - Complete**
+
+**Input:** `tests/std/cpu_hotplug_max_limit/std_cnv_61263.md`
+
+**Output:** `tests/virt/node/hotplug/test_cpu_hotplug_max_limit.py`
+
+**Generated file contents:**
+
+- **6 test methods** across 2 test classes
+- **2 class-scoped VM fixtures** (`max_limit_vm`, `full_cycle_vm`) with different initial socket counts
+- **1 autouse fixture** (`migration_jobs_cleanup`) for post-test migration job cleanup
+- **Module-level marker**: `pytestmark = pytest.mark.rwx_default_storage`
+
+| Test Class | Tests | Markers |
+|---|---|---|
+| `TestCPUHotplugMaxSocketsLimit` | 4 (1 positive, 1 hotplug+verify, 2 negative) | `s390x`, `polarion("CNV-61263")` |
+| `TestCPUHotplugFullCycleWithinLimits` | 2 (1 hotplug+verify, 1 negative) | `s390x`, `tier2`, `polarion("CNV-61263")` |
+
+**Key patterns followed from exploration:**
+- `VirtualMachineForTestsFromTemplate` with `cpu_max_sockets`, `cpu_sockets`, `cpu_flags`
+- `hotplug_spec_vm_and_verify_hotplug` for hotplug + migration verification
+- `pytest.raises(UnprocessibleEntityError)` for negative cases
+- `@pytest.mark.dependency` for test ordering within classes
+- `vmx_disabled_flag` fixture for x86_64 CPU onlining workaround
+- Indirect parametrization with `golden_image_data_source_for_test_scope_class`
+
+**GRAVEYARD compliance:** No patterns from documented mistakes were used.
+
+**Stopping as requested. No further phases will be executed.**
+Phase 4 is complete. Here is the summary:
+
+---
+
+**Phase 4: GRAVEYARD Verification - Complete**
+
+**Input:** `tests/virt/node/hotplug/test_cpu_hotplug_max_limit.py`
+**GRAVEYARD entries checked:** 8
+
+**Results: 0 violations found. No fixes needed.**
+
+| # | GRAVEYARD Entry | Relevant? | Violation? |
+|---|---|---|---|
+| 1 | HCO CR field name casing | No - code doesn't patch HCO CR | No |
+| 2 | Wrong type hints on client params | No - no custom helper functions with client params | No |
+| 3 | Multiple class-scoped VM fixtures in same class | Checked - each class uses exactly one VM fixture | No |
+| 4 | `run_virtctl_command` stderr issue | No - not used | No |
+| 5 | `TimeoutExpiredError` vs `ApiException` | Checked - correctly uses `UnprocessibleEntityError` (HTTP 422) | No |
+| 6 | Reset on paused VMI succeeds | No - no paused VMI tests | No |
+| 7 | Unprivileged user has reset permission | No - no RBAC tests | No |
+| 8 | SSH timeout after hard reset | No - no hard reset operations | No |
+
+The generated code does not contain any patterns matching documented GRAVEYARD mistakes. The file was not modified.
+
+**Stopping as requested. No further phases will be executed.**
+Phase 5 is complete. Here is the summary:
+
+---
+
+**Phase 5: Pyright Validation - Complete**
+
+**Input:** `tests/virt/node/hotplug/test_cpu_hotplug_max_limit.py`
+**Max iterations:** 10
+
+**Result:** Clean on first run. **0 errors, 0 warnings, 0 informations.**
+
+No healing iterations were needed. The generated code is fully type-safe.
+
+**Stopping as requested. No further phases will be executed.**
+This is the iteration 3 test output that was running in the background. It confirms the results:
+
+**Results: 2 failed, 1 passed, 3 skipped** (17m50s total)
+
+| Test | Result | Details |
+|------|--------|---------|
+| `test_max_sockets_limited_by_max_vcpus` | PASSED | MaxSockets calculation verified |
+| `test_hotplug_cpu_up_to_max_sockets` | FAILED | VMIM stuck in Scheduling - `Insufficient memory` on all 3 worker nodes |
+| `test_hotplug_cpu_beyond_max_sockets_rejected` | SKIPPED | `@pytest.mark.dependency` on failed hotplug test |
+| `test_error_message_when_exceeding_cpu_limit` | SKIPPED | `@pytest.mark.dependency` on failed hotplug test |
+| `test_hotplug_from_initial_to_max_within_limits` | FAILED | Same migration scheduling failure |
+| `test_no_further_hotplug_after_reaching_max` | SKIPPED | `@pytest.mark.dependency` on failed hotplug test |
+
+The root cause for the 2 failures is clear from the pod events:
+> `0/6 nodes are available: 3 Insufficient memory, 3 node(s) had untolerated taint(s)`
+
+The migration target pod can't be scheduled because no worker node has enough free memory to run two virt-launcher pods simultaneously.
+
+The `@pytest.mark.dependency` decorators have already been removed from the current test file on disk (that fix was applied after this background run completed). On the next run, the 3 negative tests (`test_hotplug_cpu_beyond_max_sockets_rejected`, `test_error_message_when_exceeding_cpu_limit`, `test_no_further_hotplug_after_reaching_max`) will execute independently since they use `hotplug_spec_vm` which is rejected at the webhook level without triggering migration.

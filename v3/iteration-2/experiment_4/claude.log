@@ -1,0 +1,55 @@
+Phase 1 is complete. Here is what was generated:
+
+**STD file:** `tests/std/vm_snapshot_restore/std_cnv_63819.md`
+
+**Summary of the STD:**
+
+The STD transforms STP `stps/4.md` (CNV-63819 - VM Snapshot Restore Stuck with runStrategy RerunOnFailure) into test stubs organized in a single test file `tests/storage/snapshots/test_snapshot_restore_run_strategy.py` with 4 test classes:
+
+| Test Class | Tests | Tier | Description |
+|---|---|---|---|
+| `TestSnapshotRestoreRerunOnFailure` | 3 | T1 | Core bug fix: restore completes, no auto-start during restore, VM starts after restore |
+| `TestSnapshotRestoreRunStrategies` | 2 (x3 params: Always, Manual, Halted) | T1 | Regression: restore works for all other run strategies |
+| `TestSnapshotRestoreDataIntegrity` | 2 | T2 | E2E: pre-snapshot data preserved, post-snapshot data removed |
+| `TestMultipleSnapshotRestore` | 2 | T2 | Multiple snapshots: restore from different snapshots completes |
+
+**Total:** 9 test methods (15 including parametrized expansions), covering all 8 STP scenarios.
+Phase 2 is complete. The exploration covered all four phases: documentation conventions, utility/library mapping, existing test precedents (especially the snapshot tests at `tests/storage/snapshots/`), and all 9 GRAVEYARD.md entries. The findings are now available in conversation context for subsequent phases.
+Phase 3 is complete. Here is what was generated:
+
+**Test file:** `tests/storage/snapshots/test_snapshot_restore_run_strategy.py` (350 lines)
+**Conftest additions:** `tests/storage/snapshots/conftest.py` (new fixtures added)
+
+### Generated Test Structure
+
+| Test Class | Tests | Fixture | Description |
+|---|---|---|---|
+| `TestSnapshotRestoreRerunOnFailure` | 3 (gating) | `rerun_on_failure_vm_with_snapshot` (class) | Core bug fix: restore completes, no auto-start during restore, VM starts after restore |
+| `TestSnapshotRestoreRunStrategies` | 2 x 3 params (Always, Manual, Halted) | `run_strategy_vm_with_snapshot` (class, parametrized) | Regression: restore works for all strategies |
+| `TestSnapshotRestoreDataIntegrity` | 2 | `data_integrity_restored_vm` (class) | E2E: pre-snapshot data preserved, post-snapshot data removed |
+| `TestMultipleSnapshotRestore` | 2 | `multiple_snapshots_vm` (class) | Multiple snapshots: restore from each completes |
+
+### Key Design Decisions
+- **Separate classes per VM fixture** (following GRAVEYARD lesson about class-scoped fixture scheduling)
+- **Parametrized class** for regression strategies (Always/Manual/Halted) - pytest runs each parameter sequentially, safe for class-scoped fixtures
+- **Inline restore in test body** (matching existing `test_snapshots.py` pattern) - each test creates its own `VirtualMachineRestore` via context manager
+- **`_snapshot_vm_for_strategy` helper** - reduces fixture duplication across strategies
+- **`ssh_timeout=TIMEOUT_10MIN`** for post-restore VM starts (GRAVEYARD lesson about SSH after disruptive operations)
+- **`TimeoutSampler`** for auto-start check polling (GRAVEYARD lesson: never use `time.sleep()` in loops)
+
+## Phase 5: Pyright Heal Report
+
+**Files validated:**
+- `tests/storage/snapshots/test_snapshot_restore_run_strategy.py`
+- `tests/storage/snapshots/conftest.py`
+
+**Iterations: 2 of 10 max | Errors fixed: 1 | Final state: 0 errors, 0 warnings**
+
+| # | Error | Fix Applied |
+|---|---|---|
+| 1 | `VirtualMachineInstance` is not exported from `ocp_resources.virtual_machine` (reportPrivateImportUsage) | Split import: `VirtualMachine` from `ocp_resources.virtual_machine`, `VirtualMachineInstance` from `ocp_resources.virtual_machine_instance` |
+
+Conftest had 0 errors from the start. Phase 5 is complete.
+Delayed notification for `TestSnapshotRestoreDataIntegrity` + `TestMultipleSnapshotRestore` (task `bff0a62`) -- already completed with 4/4 passed. Already accounted for in Phase 6. No action needed.
+
+All 6 phases are complete. The full pipeline produced 13/13 passing tests.

@@ -1,0 +1,224 @@
+Act as a Senior SDET. I need you to implement the test plan below.
+
+I am currently in the root of the repository. Before generating any code, you must perform a "Context Exploration" phase to understand the existing testing architecture.
+
+**Step 1: Context Exploration**
+1.  Scan the `docs/` folder to understand the project's testing conventions or architecture documentation.
+2.  Analyze the `libs/` and `utilities/` folders. Identify existing helper classes, fixtures, and utility functions.
+3.  Look for existing test files in `tests/` folder to see how they import these utilities and what standard `pytest` fixtures are available (e.g., clients, namespace helpers). Examine how tests are linked to requirements.
+
+**Step 2: Code Generation**
+* Implement the scenarios from the Test Plan below.
+* **Strict Constraint:** Do not hallucinate new utilities. You MUST use the existing functions and classes you found in `libs/` and `utilities/`. If a specific helper is missing, implement it locally in the test file using the base clients found.
+
+**Test Plan (STP):**
+# Software Test Plan (STP): GA: Force/hard reset
+
+---
+
+## I. Metadata & Tracking
+
+| Attribute               | Details                                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Feature in Jira**     | [VIRTSTRAT-357: Hard VM Reset](https://issues.redhat.com/browse/VIRTSTRAT-357)                              |
+| **Version Tested**      | TBD                                                                                                         |
+| **Test Plan Author**    | Generated via STP Builder                                                                                   |
+| **Created Date**        | 2025-01-01                                                                                                  |
+| **Last Updated**        | 2025-01-01                                                                                                  |
+| **Owner**               | Unassigned                                                                                                  |
+| **QE Reviewer**         | TBD                                                                                                         |
+| **Status**              | Draft                                                                                                       |
+| **Test Execution**      | TBD                                                                                                         |
+
+---
+
+## II. Related GitHub Pull Requests
+
+| PR Link                                                  | Title                       | Repository        | Status  |
+| -------------------------------------------------------- | --------------------------- | ----------------- | ------- |
+| [kubevirt/kubevirt#13208](https://github.com/kubevirt/kubevirt/pull/13208) | VMI Reset Functionality     | kubevirt/kubevirt | Merged  |
+
+---
+
+## III. Motivation and Requirements Review
+
+### 1. Background
+
+The **Force/Hard Reset** feature addresses a key user requirement: the ability to reset a hung or unresponsive VirtualMachineInstance (VMI) without requiring pod rescheduling. This is analogous to the `virsh reset` command in libvirt, which sends a hardware reset signal to the guest VM without affecting the pod infrastructure.
+
+Traditional VM restart mechanisms in KubeVirt involve stopping and starting the VM, which triggers pod termination and recreation. This approach is time-consuming, disruptive, and may result in different scheduling decisions. The hard reset functionality provides a faster, in-place alternative that:
+
+- Simulates pressing the hardware reset button on a physical machine
+- Does not require pod rescheduling
+- Preserves VMI UID and pod assignment
+- Provides an immediate recovery path for hung guests
+
+### 2. Acceptance Criteria (Extracted from Jira)
+
+| ID   | Criterion Description                                                                   | Validated By Test |
+| ---- | --------------------------------------------------------------------------------------- | ----------------- |
+| AC-1 | As a VM owner, I can perform a reset of a VMI                                           | TS-01, TS-02      |
+| AC-2 | The reset operation should not require a new pod to be scheduled                        | TS-01             |
+| AC-3 | The reset functionality is exposed via the subresource API                              | TS-01, TS-03      |
+| AC-4 | The reset functionality is accessible via virtctl command                               | TS-02             |
+| AC-5 | Appropriate RBAC permissions are enforced for the reset operation                       | TS-04             |
+| AC-6 | Reset operation fails gracefully on non-running VMIs                                    | TS-05             |
+
+---
+
+## IV. Software Test Plan
+
+### 1. Scope
+
+This test plan covers the Force/Hard Reset feature for VirtualMachineInstance objects in OpenShift Virtualization. The scope includes:
+
+**In Scope:**
+- VMI Reset subresource API endpoint (`/virtualmachineinstances/{name}/reset`)
+- `virtctl reset` command functionality
+- RBAC permissions for reset operations
+- Client-go library integration
+- Error handling for non-running VMIs
+- Integration with virt-handler and virt-launcher components
+- Libvirt domain reset functionality
+
+**Out of Scope:**
+- UI integration (covered by separate CNV-51003)
+- Documentation (covered by CNV-69172)
+- Advanced Cluster Management integration (ACM-18368, ACM-20026)
+- Force shutdown functionality (CNV-16349)
+
+### 2. Goals
+
+| ID    | Goal Description                                                                              |
+| ----- | --------------------------------------------------------------------------------------------- |
+| G-01  | Verify VMI reset API endpoint functions correctly for running VMIs                            |
+| G-02  | Verify virtctl reset command provides expected user experience                                |
+| G-03  | Confirm RBAC permissions properly restrict/allow reset operations                             |
+| G-04  | Validate error handling for edge cases (non-running VMI, invalid VMI name)                    |
+| G-05  | Ensure reset does not cause pod rescheduling or VMI UID change                                |
+| G-06  | Verify reset triggers actual guest reboot (boot time changes post-reset)                      |
+
+### 3. Non-Goals
+
+| ID    | Non-Goal Description                                                                          |
+| ----- | --------------------------------------------------------------------------------------------- |
+| NG-01 | Performance benchmarking of reset operations                                                  |
+| NG-02 | Testing UI integration for reset functionality                                                |
+| NG-03 | Testing cross-cluster reset scenarios via ACM                                                 |
+| NG-04 | Testing reset during migration operations                                                     |
+| NG-05 | Testing reset interaction with SEV/TDX confidential VMs                                       |
+
+### 4. Test Strategy
+
+| Tier               | Description                                                                                              | Automation Target |
+| ------------------ | -------------------------------------------------------------------------------------------------------- | ----------------- |
+| Unit Tests         | Tests for individual components (cmd-server, manager, virtctl command, client-go mocks)                 | 100%              |
+| Tier 1 (Functional)| API endpoint testing, basic reset functionality, RBAC validation                                        | 100%              |
+| Tier 2 (End-to-End)| Full flow testing with actual VMs, boot time verification, pod preservation                             | 100%              |
+
+### 5. Test Environment
+
+| Attribute           | Requirement                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| OpenShift Version   | 4.16+ (with KubeVirt supporting reset subresource)                                                      |
+| Cluster Size        | Minimum 3-node cluster (1 control plane, 2 workers)                                                     |
+| Storage             | Any storage class supporting RWO PVCs                                                                   |
+| CNV Version         | Version containing kubevirt/kubevirt#13208                                                              |
+| Guest OS            | Alpine Linux (for test tooling), RHEL 9 (for production scenarios)                                      |
+
+### 6. Entry Criteria
+
+| ID    | Criterion                                                                                               |
+| ----- | ------------------------------------------------------------------------------------------------------- |
+| EC-01 | CNV deployment with reset subresource support is available                                              |
+| EC-02 | Test cluster meets minimum environment requirements                                                     |
+| EC-03 | virtctl binary includes reset command                                                                   |
+| EC-04 | RBAC manifests include virtualmachineinstances/reset permissions                                        |
+
+### 7. Risks
+
+| ID    | Risk Description                                              | Likelihood | Impact | Mitigation                                           |
+| ----- | ------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------- |
+| R-01  | Reset may not work with certain guest OS configurations       | Low        | Medium | Test with multiple guest OS types                    |
+| R-02  | RBAC permissions may conflict with existing cluster policies  | Low        | Low    | Document required permissions clearly                |
+| R-03  | Reset timing may cause false test failures                    | Medium     | Low    | Implement appropriate waits and retries              |
+
+### 8. Known Limitations
+
+| ID    | Limitation Description                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------- |
+| KL-01 | Reset is only supported for running VMIs; stopped/paused VMIs will return an error                      |
+| KL-02 | Reset simulates hardware reset; guest data in memory will be lost                                       |
+| KL-03 | Guest OS must support ACPI reset signal for predictable behavior                                        |
+
+---
+
+## V. Test Scenarios & Traceability
+
+### V.1 Regression Impact Summary
+
+**Entry Points Identified:**
+- `pkg/virt-api/rest/lifecycle.go:ResetVMIRequestHandler` - API handler for reset requests
+- `pkg/virt-handler/rest/lifecycle.go:ResetHandler` - virt-handler endpoint
+- `pkg/virtctl/reset/reset.go:NewResetCommand` - virtctl reset command
+- `staging/src/kubevirt.io/client-go/kubevirt/typed/core/v1/virtualmachineinstance_expansion.go:Reset` - client-go method
+
+**Related Code Paths (Recursive Scan):**
+
+| Component           | File Path                                                                    | Impact Level |
+| ------------------- | ---------------------------------------------------------------------------- | ------------ |
+| virt-api            | `pkg/virt-api/api.go`                                                        | High         |
+| virt-api            | `pkg/virt-api/rest/lifecycle.go`                                             | High         |
+| virt-handler        | `pkg/virt-handler/rest/lifecycle.go`                                         | High         |
+| virt-handler        | `pkg/virt-handler/cmd-client/client.go`                                      | High         |
+| virt-launcher       | `pkg/virt-launcher/virtwrap/cmd-server/server.go`                            | High         |
+| virt-launcher       | `pkg/virt-launcher/virtwrap/manager.go`                                      | High         |
+| virt-launcher       | `pkg/virt-launcher/virtwrap/cli/libvirt.go`                                  | High         |
+| client-go           | `staging/src/kubevirt.io/client-go/kubevirt/typed/core/v1/*`                 | Medium       |
+| client-go           | `staging/src/kubevirt.io/client-go/kubecli/handler.go`                       | Medium       |
+| RBAC                | `pkg/virt-operator/resource/generate/rbac/cluster.go`                        | Medium       |
+| RBAC                | `pkg/virt-operator/resource/generate/rbac/controller.go`                     | Medium       |
+| virtctl             | `pkg/virtctl/reset/reset.go`                                                 | Medium       |
+| virtctl             | `pkg/virtctl/root.go`                                                        | Low          |
+
+**Potentially Impacted Features:**
+
+| Feature                       | Reason for Impact                                                           |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| VMI Lifecycle Management      | New lifecycle operation added alongside pause/unpause/softreboot            |
+| RBAC/Authorization            | New subresource permission: `virtualmachineinstances/reset`                 |
+| virtctl CLI                   | New command added to virtctl                                                |
+| virt-handler REST API         | New endpoint for reset handling                                             |
+| Libvirt Domain Operations     | New domain operation utilizing libvirt's Reset API                          |
+| Client Libraries              | New method added to VirtualMachineInstanceInterface                         |
+| Admin/Edit ClusterRoles       | Updated to include reset permission                                         |
+
+### V.2 Test Scenarios
+
+| Test ID | Scenario Description                                                        | Tier               | Automated | Status      | Related ACs    |
+| ------- | --------------------------------------------------------------------------- | ------------------ | --------- | ----------- | -------------- |
+| TS-01   | Reset running VMI via API and verify guest reboots                          | Tier 2 (End-to-End)| Yes       | Implemented | AC-1, AC-2, AC-3 |
+| TS-02   | Reset running VMI via virtctl command                                       | Tier 1 (Functional)| Yes       | Pending     | AC-1, AC-4     |
+| TS-03   | Verify VMI UID remains unchanged after reset                                | Tier 2 (End-to-End)| Yes       | Implemented | AC-2           |
+| TS-04   | Verify RBAC: user with edit role can reset VMI                              | Tier 1 (Functional)| Partial   | Pending     | AC-5           |
+| TS-05   | Verify reset fails on non-running VMI with appropriate error                | Tier 1 (Functional)| Yes       | Implemented | AC-6           |
+| TS-06   | Verify reset fails on non-existent VMI                                      | Tier 1 (Functional)| Yes       | Pending     | AC-6           |
+| TS-11   | Verify boot time changes after reset                                        | Tier 2 (End-to-End)| Yes       | Implemented | AC-1           |
+| TS-12   | Verify reset on paused VMI behavior                                         | Tier 1 (Functional)| No        | Pending     | AC-6           |
+
+---
+
+## VI. Sign-off and Approval
+
+| Role              | Name | Date | Signature |
+| ----------------- | ---- | ---- | --------- |
+| QE Lead           |      |      |           |
+| Dev Lead          |      |      |           |
+| Product Owner     |      |      |           |
+
+---
+
+**Document Control:**
+- This document was generated using automated STP Builder tooling
+- Test scenarios are derived exclusively from regression impact analysis of code changes
+- Implementation details from PR kubevirt/kubevirt#13208 were analyzed for test coverage

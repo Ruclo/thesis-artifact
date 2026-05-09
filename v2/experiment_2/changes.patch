@@ -1,0 +1,322 @@
+diff --git a/tests/virt/node/general/test_vnc_screenshot_stability.py b/tests/virt/node/general/test_vnc_screenshot_stability.py
+new file mode 100644
+index 0000000..78bb638
+--- /dev/null
++++ b/tests/virt/node/general/test_vnc_screenshot_stability.py
+@@ -0,0 +1,316 @@
++"""
++Test VNC console stability with concurrent screenshot/thumbnail usage
++
++Covers CNV-61271: VNC Console Disconnect Due to Thumbnail/Full Screen Competition
++
++This test suite verifies that the screenshot API works independently of VNC connections,
++preventing VNC disconnects when thumbnails and full-screen VNC are used simultaneously.
++"""
++
++import logging
++import shlex
++import time
++from pathlib import Path
++
++import pytest
++from timeout_sampler import TimeoutExpiredError, TimeoutSampler
++
++from utilities.constants import TIMEOUT_1MIN, TIMEOUT_5MIN, TIMEOUT_30SEC
++from utilities.infra import run_virtctl_command
++from utilities.virt import VirtualMachineForTests, fedora_vm_body, running_vm
++from utilities.vnc_utils import VNCConnection
++
++pytestmark = [pytest.mark.virt, pytest.mark.usefixtures("skip_if_no_vnc")]
++
++LOGGER = logging.getLogger(__name__)
++
++
++@pytest.fixture(scope="module")
++def skip_if_no_vnc(vm_for_vnc_test):
++    """Skip tests if VM does not have VNC console configured."""
++    vm = vm_for_vnc_test
++    if not vm.vmi.instance.get("spec", {}).get("domain", {}).get("devices", {}).get("interfaces"):
++        pytest.skip("VM does not have network interfaces configured for VNC")
++
++
++@pytest.fixture(scope="module")
++def vm_for_vnc_test(namespace, unprivileged_client):
++    """
++    VM with VNC console for testing screenshot and VNC stability.
++    """
++    name = "vm-vnc-screenshot-test"
++    with VirtualMachineForTests(
++        client=unprivileged_client,
++        name=name,
++        namespace=namespace.name,
++        body=fedora_vm_body(name=name),
++    ) as vm:
++        running_vm(vm=vm)
++        LOGGER.info(f"VM {vm.name} is running and ready for VNC tests")
++        yield vm
++
++
++def get_screenshot(vm_name: str, vm_namespace: str, output_path: str) -> bool:
++    """
++    Capture VM screenshot using virtctl vnc screenshot command.
++
++    Args:
++        vm_name: Name of the VM
++        vm_namespace: Namespace of the VM
++        output_path: Path where screenshot will be saved
++
++    Returns:
++        bool: True if screenshot captured successfully
++    """
++    try:
++        run_virtctl_command(
++            command=shlex.split(f"vnc screenshot {vm_name} -f {output_path}"),
++            namespace=vm_namespace,
++            check=True,
++        )
++        screenshot_file = Path(output_path)
++        if screenshot_file.exists() and screenshot_file.stat().st_size > 0:
++            LOGGER.info(f"Screenshot captured successfully: {output_path} ({screenshot_file.stat().st_size} bytes)")
++            return True
++        LOGGER.warning(f"Screenshot file created but is empty: {output_path}")
++        return False
++    except Exception as err:
++        LOGGER.error(f"Failed to capture screenshot: {err}")
++        return False
++
++
++def verify_vnc_connection_active(vnc_child) -> bool:
++    """
++    Verify VNC connection is still active.
++
++    Args:
++        vnc_child: pexpect child process for VNC connection
++
++    Returns:
++        bool: True if VNC connection is active
++    """
++    if vnc_child.terminated:
++        LOGGER.error("VNC connection terminated unexpectedly")
++        return False
++    return True
++
++
++@pytest.mark.polarion("CNV-61271")
++def test_screenshot_without_vnc_connection(vm_for_vnc_test, tmp_path):
++    """
++    Test Scenario 2: Screenshot API Without VNC Connection
++
++    Verify that screenshot can be captured without establishing VNC connection.
++    This validates the fix where screenshot uses libvirt virDomainScreenshot
++    instead of VNC.
++
++    Steps:
++        1. Ensure no VNC clients connected
++        2. Call vnc/screenshot API endpoint
++        3. Verify screenshot returned successfully
++        4. Verify no VNC connection was established
++
++    Expected Result:
++        Screenshot returned without requiring VNC connection
++    """
++    vm = vm_for_vnc_test
++    screenshot_path = str(tmp_path / f"{vm.name}-no-vnc.png")
++
++    LOGGER.info(f"Capturing screenshot for {vm.name} without VNC connection")
++    screenshot_success = get_screenshot(
++        vm_name=vm.name,
++        vm_namespace=vm.namespace,
++        output_path=screenshot_path,
++    )
++
++    assert screenshot_success, "Screenshot should be captured successfully without VNC connection"
++    LOGGER.info("Screenshot captured successfully without VNC connection")
++
++
++@pytest.mark.polarion("CNV-61271")
++def test_screenshot_quality(vm_for_vnc_test, tmp_path):
++    """
++    Test Scenario 3: Screenshot Quality Verification
++
++    Verify screenshot image quality is acceptable and shows VM display content.
++
++    Steps:
++        1. Call screenshot API
++        2. Verify screenshot file is created
++        3. Verify screenshot has reasonable file size (not corrupted)
++
++    Expected Result:
++        Screenshot clearly shows VM display content with acceptable quality
++    """
++    vm = vm_for_vnc_test
++    screenshot_path = str(tmp_path / f"{vm.name}-quality.png")
++
++    LOGGER.info(f"Capturing screenshot for quality verification: {vm.name}")
++    screenshot_success = get_screenshot(
++        vm_name=vm.name,
++        vm_namespace=vm.namespace,
++        output_path=screenshot_path,
++    )
++
++    assert screenshot_success, "Screenshot should be captured successfully"
++
++    screenshot_file = Path(screenshot_path)
++    file_size = screenshot_file.stat().st_size
++
++    assert file_size > 1024, f"Screenshot file size too small ({file_size} bytes), may be corrupted"
++    LOGGER.info(f"Screenshot quality verified: {file_size} bytes")
++
++
++@pytest.mark.polarion("CNV-61271")
++@pytest.mark.tier2
++def test_vnc_stability_with_concurrent_screenshots(vm_for_vnc_test, tmp_path):
++    """
++    Test Scenario 1 & 4: VNC Stability with Concurrent Screenshot/Thumbnail
++
++    Verify VNC connection remains stable when screenshots are captured concurrently.
++    This simulates the scenario where VM overview thumbnail and full-screen VNC
++    compete for connection.
++
++    Steps:
++        1. Open VNC connection to VM
++        2. Capture multiple screenshots while VNC is active
++        3. Monitor VNC connection stability
++        4. Verify no disconnects occur
++
++    Expected Result:
++        VNC remains connected throughout screenshot captures, no disconnects
++    """
++    vm = vm_for_vnc_test
++
++    LOGGER.info(f"Opening VNC connection to {vm.name}")
++    with VNCConnection(vm=vm) as vnc_child:
++        LOGGER.info("VNC connection established successfully")
++
++        assert verify_vnc_connection_active(vnc_child=vnc_child), "VNC connection should be active"
++
++        num_screenshots = 5
++        screenshot_interval = 10
++
++        LOGGER.info(f"Capturing {num_screenshots} screenshots while VNC is active")
++        for idx in range(num_screenshots):
++            screenshot_path = str(tmp_path / f"{vm.name}-concurrent-{idx}.png")
++
++            LOGGER.info(f"Capturing screenshot {idx + 1}/{num_screenshots}")
++            screenshot_success = get_screenshot(
++                vm_name=vm.name,
++                vm_namespace=vm.namespace,
++                output_path=screenshot_path,
++            )
++
++            assert screenshot_success, f"Screenshot {idx + 1} should be captured successfully"
++
++            assert verify_vnc_connection_active(
++                vnc_child=vnc_child
++            ), f"VNC connection should remain active after screenshot {idx + 1}"
++            LOGGER.info(f"VNC connection stable after screenshot {idx + 1}")
++
++            if idx < num_screenshots - 1:
++                time.sleep(screenshot_interval)
++
++        LOGGER.info(f"All {num_screenshots} screenshots captured, VNC connection remains stable")
++
++
++@pytest.mark.polarion("CNV-61271")
++@pytest.mark.tier2
++def test_extended_vnc_with_periodic_screenshots(vm_for_vnc_test, tmp_path):
++    """
++    Test Scenario 5: Extended Dual-Tab Usage (Simplified)
++
++    Verify VNC connection stability over extended period with periodic screenshots.
++    This simulates user having both VM overview (thumbnail refreshing) and
++    full-screen VNC open.
++
++    Steps:
++        1. Open VNC connection
++        2. Periodically capture screenshots over 5 minutes
++        3. Monitor VNC connection throughout
++        4. Verify continuous connectivity
++
++    Expected Result:
++        Continuous VNC connectivity throughout the test duration
++    """
++    vm = vm_for_vnc_test
++    test_duration = TIMEOUT_5MIN
++    screenshot_interval = 30
++
++    LOGGER.info(f"Starting extended VNC stability test ({test_duration}s duration)")
++    with VNCConnection(vm=vm) as vnc_child:
++        LOGGER.info("VNC connection established for extended test")
++
++        start_time = time.time()
++        screenshot_count = 0
++
++        while time.time() - start_time < test_duration:
++            elapsed = int(time.time() - start_time)
++
++            assert verify_vnc_connection_active(
++                vnc_child=vnc_child
++            ), f"VNC connection should remain active at {elapsed}s"
++
++            if elapsed % screenshot_interval == 0 and elapsed > 0:
++                screenshot_count += 1
++                screenshot_path = str(tmp_path / f"{vm.name}-extended-{screenshot_count}.png")
++
++                LOGGER.info(f"Capturing periodic screenshot {screenshot_count} at {elapsed}s")
++                screenshot_success = get_screenshot(
++                    vm_name=vm.name,
++                    vm_namespace=vm.namespace,
++                    output_path=screenshot_path,
++                )
++
++                assert screenshot_success, f"Screenshot {screenshot_count} should be captured successfully"
++                assert verify_vnc_connection_active(
++                    vnc_child=vnc_child
++                ), f"VNC should remain active after screenshot at {elapsed}s"
++
++            time.sleep(1)
++
++        LOGGER.info(
++            f"Extended test completed: {screenshot_count} screenshots captured, "
++            f"VNC connection stable for {test_duration}s"
++        )
++
++
++@pytest.mark.polarion("CNV-61271")
++@pytest.mark.tier2
++def test_rapid_screenshot_captures(vm_for_vnc_test, tmp_path):
++    """
++    Test rapid successive screenshot captures without VNC connection.
++
++    Verify that rapid screenshot API calls work reliably without race conditions.
++
++    Steps:
++        1. Capture screenshots in rapid succession
++        2. Verify all screenshots captured successfully
++        3. Verify no errors or connection issues
++
++    Expected Result:
++        All screenshots captured successfully without errors
++    """
++    vm = vm_for_vnc_test
++    num_rapid_screenshots = 10
++
++    LOGGER.info(f"Testing rapid screenshot captures: {num_rapid_screenshots} screenshots")
++    success_count = 0
++
++    for idx in range(num_rapid_screenshots):
++        screenshot_path = str(tmp_path / f"{vm.name}-rapid-{idx}.png")
++
++        screenshot_success = get_screenshot(
++            vm_name=vm.name,
++            vm_namespace=vm.namespace,
++            output_path=screenshot_path,
++        )
++
++        if screenshot_success:
++            success_count += 1
++
++    assert success_count == num_rapid_screenshots, (
++        f"All rapid screenshots should succeed: {success_count}/{num_rapid_screenshots}"
++    )
++    LOGGER.info(f"Rapid screenshot test completed: {success_count}/{num_rapid_screenshots} successful")

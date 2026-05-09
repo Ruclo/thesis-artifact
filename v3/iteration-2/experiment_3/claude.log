@@ -1,0 +1,148 @@
+Phase 1 is complete. Here is the result:
+
+**STD file generated:** `tests/std/vmi_hard_reset/std_virtstrat_357.md`
+
+**Summary of what was generated:**
+
+| Test Class | Tests | Tier | STP Scenarios |
+|---|---|---|---|
+| `TestVMIResetViaAPI` | 4 | Tier 2 | TS-01, TS-03, TS-11 |
+| `TestVMIResetViaVirtctl` | 1 | Tier 1 | TS-02 |
+| `TestVMIResetRBAC` | 1 | Tier 1 | TS-04 |
+| `TestVMIResetNegative` | 3 | Tier 1 | TS-05, TS-06, TS-12 |
+| **Total** | **9 tests** | | **All 8 STP scenarios covered** |
+
+All 6 acceptance criteria (AC-1 through AC-6) are traced to specific tests. The STD contains test stubs with comprehensive docstrings following the Preconditions/Steps/Expected format, with `pass` bodies only. Stopping here as instructed -- no further phases will be executed.
+Phase 2 is complete. Here is the full repository exploration summary:
+
+---
+
+## Repository Exploration Complete
+
+### Existing VMI Reset Test Found
+
+An existing test exists at `tests/virt/node/general/test_vmi_reset.py` with:
+- A `TestVMIReset` class with one test (`test_reset_success`, Polarion CNV-12373)
+- Uses `vm_for_test` fixture (class-scoped, from `tests/conftest.py`) which creates a `VirtualMachineForTests` with `fedora_vm_body` and starts it via `running_vm()`
+- Uses `vm.vmi.reset()` (from `ocp_resources.virtual_machine_instance.VirtualMachineInstance.reset()` which calls `PUT /reset` subresource API)
+- Verifies boot count via `journalctl --list-boots | wc -l` over SSH
+
+### Key APIs and Patterns
+
+**VMI Reset API**: `vm.vmi.reset()` - calls `self.api_request(method="PUT", action="reset")` on the VMI object.
+
+**VM Boot Time**: `get_vm_boot_time(vm)` in `utilities/virt.py:2609` - uses `who -b` via SSH for Linux VMs.
+
+**VMI UID access**: `vm.vmi.instance.metadata.uid` - standard pattern seen across the codebase.
+
+**Virt-launcher pod**: `vm.vmi.virt_launcher_pod` or `vm.privileged_vmi.virt_launcher_pod` - property on VMI.
+
+**virtctl commands**: `run_virtctl_command(command, namespace=None, verify_stderr=True)` in `utilities/infra.py:610`.
+
+### GRAVEYARD Lessons (Critical for Code Generation)
+
+10 documented mistakes. Most relevant to VMI reset tests:
+
+1. **GRAVEYARD #4**: `run_virtctl_command` returns `False` when virtctl writes info logs to stderr. **Always pass `verify_stderr=False`** for virtctl commands that write logs on success (like `virtctl reset`).
+
+2. **GRAVEYARD #5**: ocp_resources re-raises `kubernetes.client.exceptions.ApiException`, NOT `TimeoutExpiredError`. **Catch `ApiException`** for API error testing.
+
+3. **GRAVEYARD #6**: **Resetting a paused VMI succeeds without error**. Hard reset is hardware-level and works regardless of pause state. Do NOT write a negative test for paused VMI.
+
+4. **GRAVEYARD #7**: **Unprivileged user (namespace admin) already has VMI reset permission**. The `unprivileged_client` fixture provides namespace-admin level access which includes reset.
+
+5. **GRAVEYARD #8**: **SSH timeout too short after hard reset**. Use `TIMEOUT_10MIN` for `wait_for_running_vm` after hard reset; default `TIMEOUT_2MIN` is insufficient because guest cold-boots.
+
+6. **GRAVEYARD #3**: Never put tests using different class-scoped VM fixtures in the same test class.
+
+### Common Fixtures Available
+
+- `namespace` (module-scoped) - creates isolated namespace
+- `unprivileged_client` (session-scoped) - namespace admin client
+- `admin_client` (session-scoped) - cluster admin client
+- `vm_for_test` (class-scoped, indirect parametrized) - creates and runs a Fedora VM
+
+### Key Constants
+
+- `TIMEOUT_10MIN = 600`, `TIMEOUT_5MIN = 300`, `TIMEOUT_2MIN = 120`
+- `VIRT_LAUNCHER = "virt-launcher"`
+- `OS_FLAVOR_FEDORA = "fedora"`
+
+### Import Patterns
+
+```python
+from utilities.virt import VirtualMachineForTests, fedora_vm_body, running_vm, wait_for_running_vm, get_vm_boot_time
+from utilities.infra import run_virtctl_command
+from utilities.constants import TIMEOUT_10MIN, VIRT_LAUNCHER
+from ocp_resources.virtual_machine_instance import VirtualMachineInstance
+```
+
+### Pytest Markers (from pytest.ini, strict enforcement)
+
+- `polarion("CNV-XXXX")` - test case IDs
+- `arm64`, `s390x`, `x86_64` - architecture markers
+- `tier2` (gating), `tier3` - test tier markers
+- `virt` - team marker
+- `usefixtures()` - when fixture return value unused
+
+Stopping here as instructed -- no further phases will be executed.
+Phase 3 is complete.
+
+**Test file generated:** `tests/virt/node/general/test_vmi_hard_reset.py`
+
+**Summary of what was generated:**
+
+| Test Class | Tests | STP Scenarios | Notes |
+|---|---|---|---|
+| `TestVMIResetViaAPI` | 4 | TS-01, TS-03, TS-11 | Shares class-scoped VM; verifies guest reboot, UID, pod, boot time |
+| `TestVMIResetViaVirtctl` | 1 | TS-02 | Separate VM (GRAVEYARD #3: no mixed VM fixtures per class) |
+| `TestVMIResetRBAC` | 1 | TS-04 | Positive only (GRAVEYARD #7: namespace admin already has reset permission) |
+| `TestVMIResetOnStoppedVM` | 1 | TS-05 | Catches `ApiException` 404 (GRAVEYARD #5) |
+| `TestVMIResetOnNonexistentVMI` | 1 | TS-06 | Catches `ApiException` 404 (GRAVEYARD #5) |
+| `TestVMIResetOnPausedVM` | 1 | TS-12 | Positive test (GRAVEYARD #6: reset succeeds on paused VMI) |
+| **Total** | **9 tests** | | |
+
+**GRAVEYARD lessons applied:**
+- #3: Each VM fixture in its own class
+- #4: `verify_stderr=False` on `run_virtctl_command`
+- #5: `ApiException` not `TimeoutExpiredError` for negative tests
+- #6: Paused VMI reset is positive, not negative
+- #7: Namespace admin can reset (no negative RBAC test)
+- #8: `ssh_timeout=TIMEOUT_10MIN` after hard reset
+
+Stopping here as instructed -- no further phases will be executed.
+Phase 4 is complete.
+
+**GRAVEYARD Verification Results:**
+
+| # | GRAVEYARD Entry | Status |
+|---|---|---|
+| 1 | Wrong HCO CR field name casing | N/A - no HCO operations |
+| 2 | Wrong type hints on helper params | N/A - no custom helpers with client params |
+| 3 | Different class-scoped VM fixtures in same class | **PASS** - each class uses exactly one VM fixture |
+| 4 | `run_virtctl_command` missing `verify_stderr=False` | **PASS** - `verify_stderr=False` present on line 90 |
+| 5 | Catching `TimeoutExpiredError` instead of `ApiException` | **PASS** - `ApiException` with `match="404"` on lines 319, 348 |
+| 6 | Negative test for paused VMI reset | **PASS** - written as positive test (line 364) |
+| 7 | Negative RBAC test for namespace admin | **PASS** - written as positive test (line 276) |
+| 8 | SSH timeout too short after hard reset | **PASS** - `ssh_timeout=TIMEOUT_10MIN` on all 4 call sites |
+| 9 | VM with large maxSockets/memory_guest | N/A - no CPU hotplug |
+| 10 | CPU hotplug migration on constrained clusters | N/A - no CPU hotplug |
+
+**Entries checked:** 10
+**Applicable entries:** 6
+**Violations found:** 0
+**Fixes applied:** 0
+
+All 6 applicable GRAVEYARD lessons were correctly applied during Phase 3 code generation. No edits needed. Stopping here as instructed -- no further phases will be executed.
+Phase 5 is complete.
+
+**Pyright Validation Results:**
+
+```
+Iteration 1: 0 errors, 0 warnings, 0 informations
+```
+
+The test file `tests/virt/node/general/test_vmi_hard_reset.py` passed pyright with zero errors on the first run. No fixes were needed. All imports, type annotations, and attribute accesses are correct.
+
+Stopping here as instructed -- Phase 6 will not be executed.
+Everything is complete. All 9 tests pass against the live cluster, GRAVEYARD.md has been updated with the lesson learned, and the pipeline finished in 2 iterations. No further action needed.
